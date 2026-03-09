@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  
+  <!-- [아이콘 설정 영역] -->
+  <link rel="apple-touch-icon" href="icon.png">
+  <link rel="icon" href="icon.png">
+  
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="장수한우">
+  <title>장수한우곱창 손익계산서</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;800&display=swap');
+    :root {
+      --bg-primary: #0a0a0a; --bg-secondary: #1a1a1a; --bg-tertiary: #2a2a2a;
+      --text-primary: #ffffff; --text-secondary: #a0a0a0;
+      --accent-red: #dc2626; --accent-yellow: #fbbf24; --border-color: #3a3a3a;
+    }
+    body { font-family: 'Pretendard', -apple-system, sans-serif; background: var(--bg-primary); color: var(--text-primary); min-height: 100vh; padding-bottom: 80px; -webkit-tap-highlight-color: transparent; }
+    .loading-screen { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg-primary); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; }
+    .loading-spinner { width: 50px; height: 50px; border: 4px solid var(--bg-tertiary); border-top-color: var(--accent-red); border-radius: 50%; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .login-container { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg-primary); display: flex; align-items: center; justify-content: center; z-index: 9998; padding: 20px; }
+    .login-box { background: var(--bg-secondary); padding: 40px; border-radius: 2rem; width: 100%; max-width: 400px; text-align: center; border: 1px solid var(--border-color); }
+    .login-title { font-size: 28px; font-weight: 800; margin-bottom: 10px; background: linear-gradient(135deg, var(--accent-red), var(--accent-yellow)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .login-input { width: 100%; padding: 16px; background: var(--bg-tertiary); border: 2px solid var(--border-color); border-radius: 12px; color: var(--text-primary); font-size: 20px; text-align: center; letter-spacing: 6px; margin-bottom: 20px; outline: none; }
+    .login-btn { width: 100%; padding: 16px; background: var(--accent-red); border: none; border-radius: 12px; color: white; font-size: 16px; font-weight: 700; cursor: pointer; }
+    .header-logo { padding: 20px 0; text-align: center; font-size: 18px; font-weight: 800; color: #e67e22; display: flex; align-items: center; justify-content: center; gap: 6px; }
+    .selector-container { padding: 0 16px; display: flex; flex-direction: column; gap: 12px; }
+    .branch-btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .branch-btn { padding: 18px; background: #2a2a2a; border-radius: 16px; color: var(--text-secondary); font-size: 16px; font-weight: 700; border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s; }
+    .branch-btn.active { background: var(--accent-red); color: white; border-color: var(--accent-red); }
+    .date-select-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .styled-select { background: #2a2a2a; color: white; padding: 16px; border-radius: 16px; border: 1px solid var(--border-color); font-size: 16px; font-weight: 700; text-align: center; appearance: none; }
+    .summary-card { margin: 16px; padding: 28px; background: linear-gradient(135deg, var(--accent-red), #991b1b); border-radius: 2rem; box-shadow: 0 10px 30px rgba(220, 38, 38, 0.2); position: relative; overflow: hidden; }
+    .tabs { display: flex; background: var(--bg-primary); border-bottom: 1px solid var(--border-color); margin-top: 10px; }
+    .tab { flex: 1; padding: 16px 0; background: none; border: none; color: var(--text-secondary); font-size: 14px; font-weight: 700; border-bottom: 2px solid transparent; }
+    .tab.active { color: var(--accent-red); border-bottom-color: var(--accent-red); }
+    .level-1 { background: var(--bg-secondary); border-radius: 1.4rem; border: 1px solid var(--border-color); overflow: hidden; margin-bottom: 12px; }
+    .level-header { padding: 22px 20px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+    .level-2 { background: #151515; border-top: 1px solid #222; }
+    .level-3 { background: #1c1c1c; padding: 14px 20px 14px 45px; display: flex; justify-content: space-between; font-size: 13px; color: #999; border-top: 1px solid #252525; }
+    .chevron { transition: transform 0.3s ease; color: #555; }
+    .expanded .chevron { transform: rotate(180deg); }
+    .hidden { display: none !important; }
+    .currency-symbol { font-size: 10px; color: #555; margin-left: 2px; }
+  </style>
+</head>
+<body>
+
+  <div class="loading-screen" id="loadingScreen" style="display:none;">
+    <div class="loading-spinner"></div>
+    <div class="mt-4 text-zinc-500 text-sm font-bold">데이터 불러오는 중...</div>
+  </div>
+  
+  <div class="login-container" id="loginContainer">
+    <div class="login-box">
+      <div class="login-title italic">JANGSU MASTER</div>
+      <div class="text-zinc-500 text-[10px] mb-8 uppercase tracking-[0.3em] font-black">v14.3 연결 최적화 버전</div>
+      <input type="password" class="login-input" id="passwordInput" placeholder="••••••" maxlength="6" inputmode="numeric">
+      <button class="login-btn" id="loginBtn">UNLOCK SYSTEM</button>
+    </div>
+  </div>
+  
+  <div id="mainApp" class="hidden">
+    <div class="header-logo">🥩 장수한우곱창 손익계산서</div>
+    <div class="selector-container">
+      <div class="branch-btn-group">
+        <button class="branch-btn active" id="btnWondang" onclick="switchBranch('원당점')">📍 원당본점</button>
+        <button class="branch-btn" id="btnBaekseok" onclick="switchBranch('백석점')">📍 백석점</button>
+      </div>
+      <div class="date-select-group">
+        <select id="yearSelect" onchange="loadData()" class="styled-select"><option value="2025">2025년</option><option value="2026" selected>2026년</option></select>
+        <select id="monthSelect" onchange="loadData()" class="styled-select">
+          <option value="1">1월</option><option value="2" selected>2월</option><option value="3">3월</option>
+          <option value="4">4월</option><option value="5">5월</option><option value="6">6월</option>
+        </select>
+      </div>
+    </div>
+    
+    <div class="summary-card">
+      <div class="text-red-100/60 text-[12px] font-black uppercase mb-1">Total Net Profit</div>
+      <div class="text-5xl font-black tracking-tighter mb-4" id="summaryNetProfit">0원</div>
+      <div class="text-red-100/70 text-[11px] font-bold" id="summaryDate">연결 대기 중...</div>
+    </div>
+    
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('pl', this)">손익계산서</button>
+      <button class="tab" onclick="switchTab('analysis', this)">비율 분석</button>
+    </div>
+    
+    <div id="plContent" class="py-6"></div>
+    <div id="analysisContent" class="hidden p-6 grid grid-cols-2 gap-4"></div>
+  </div>
+  
+  <script>
+    // 사장님 URL 업데이트 완료 (AKfycbxxpiN0tmxnR1QZRYe-ALU645ABEhftO1X7V94Gk5J8cxSkdwX4K4OtSQhBjlQ9pQU0)
+    const API_URL = "https://script.google.com/macros/s/AKfycbxxpiN0tmxnR1QZRYe-ALU645ABEhftO1X7V94Gk5J8cxSkdwX4K4OtSQhBjlQ9pQU0/exec";
+    const TOKEN = "940216";
+    
+    let state = { branch: '원당점', year: '2026', month: '2', data: null };
+
+    window.onload = () => {
+      if (localStorage.getItem('jangsu_auth') === TOKEN) showMainApp();
+      document.getElementById('loginBtn').onclick = handleLogin;
+    };
+
+    function handleLogin() {
+      const input = document.getElementById('passwordInput').value.trim();
+      if (input === TOKEN) {
+        localStorage.setItem('jangsu_auth', TOKEN);
+        showMainApp();
+      } else {
+        alert("비밀번호가 틀렸습니다.");
+      }
+    }
+
+    function showMainApp() {
+      document.getElementById('loginContainer').style.display = 'none';
+      document.getElementById('mainApp').classList.remove('hidden');
+      loadData();
+    }
+
+    async function loadData() {
+      const loader = document.getElementById('loadingScreen');
+      loader.style.display = 'flex';
+      
+      const cleanUrl = API_URL.trim();
+      const month = document.getElementById('monthSelect').value;
+      const year = document.getElementById('yearSelect').value.slice(-2);
+      
+      // 🚨 [수정] 백엔드 Code.gs 엔진이 요구하는 명령어(getProfitLoss)로 일치시켰습니다.
+      const params = new URLSearchParams({
+        token: TOKEN,
+        branch: state.branch,
+        year: "20" + year, // 2026 형식 대응
+        month: month,
+        action: 'getProfitLoss' // <--- 이 부분이 fetch에서 getProfitLoss로 수정됨
+      });
+
+      const finalUrl = `${cleanUrl}?${params.toString()}`;
+
+      try {
+        // 구글 서버의 보안 리다이렉션을 확실히 처리하기 위해 옵션 강화
+        const res = await fetch(finalUrl, { 
+            method: 'GET',
+            redirect: 'follow'
+        });
+
+        if (!res.ok) throw new Error(`서버 응답 없음 (HTTP ${res.status})`);
+
+        const result = await res.json();
+
+        if (result.success === true || result.status === "success") {
+          state.data = result; 
+          renderUI();
+        } else {
+          alert("서버 오류: " + (result.error || result.message || "시트 데이터를 찾을 수 없습니다."));
+        }
+      } catch (e) {
+        console.error(e);
+        alert(`연결 실패!\n\n원인: ${e.message}\n\n[조치사항]\n1. 시트 탭 이름이 '26년 ${month}월 손익계산서'인지 확인\n2. 배포 관리에서 [새 버전]으로 배포했는지 확인`);
+      } finally {
+        loader.style.display = 'none';
+      }
+    }
+
+    function renderUI() {
+      if (!state.data) return;
+      const d = state.data;
+      const pnlData = d.pnlData || [];
+      const listContainer = document.getElementById('plContent');
+      listContainer.innerHTML = "";
+
+      const netVal = findVal(["매출 순 이익", "순이익", "영업이익"]);
+      document.getElementById('summaryNetProfit').innerText = netVal.toLocaleString() + "원";
+      document.getElementById('summaryDate').innerText = `'${d.latestDate || d.latestDay || '-'}'일까지의 손익계산서`;
+
+      // 사장님이 엔터로 구분해주신 계층 구조 100% 재구현
+      const schema = [
+        { title: "매출액", kw: ["매출액"], sub: [{ title: "현금매출", kw: ["현금매출"] }, { title: "카드매출", kw: ["카드매출"] }] },
+        { title: "매출원가", kw: ["매출원가"], sub: [
+            { title: "육류원가", kw: ["육류원가"], sub: ["고기값", "특양"] },
+            { title: "식자재&공산품", kw: ["식자재&공산품"], sub: ["미락", "콩나물", "네이버", "마트", "쿠팡"] },
+            { title: "주류원가", kw: ["주류원가"] }, { title: "음료원가", kw: ["음료원가"] }
+        ]},
+        { title: "인건비", kw: ["인건비"], sub: [{ title: "직원급여", kw: ["직원급여"] }, { title: "알바급여", kw: ["알바급여"] }] },
+        { title: "고정비", kw: ["고정비"], sub: [{ title: "화재보험", kw: ["화재보험"] }, { title: "정수기", kw: ["정수기"] }, { title: "세무", kw: ["세무"] }] },
+        { title: "변동비", kw: ["변동비"], sub: [{ title: "수수료", kw: ["수수료"] }, { title: "관리비", kw: ["관리비"] }, { title: "가스", kw: ["가스"] }, { title: "광고", kw: ["광고"] }] },
+        { title: "세금예수금", kw: ["세금예수금"], sub: [{ title: "부가세", kw: ["부가세"] }, { title: "종합소득세", kw: ["소득세"] }] }
+      ];
+
+      schema.forEach(major => {
+        const majorVal = findVal(major.kw);
+        const majorHtml = document.createElement('div');
+        majorHtml.className = 'level-1';
+        const color = (major.title.includes("매출") || major.title.includes("이익")) ? "text-blue-500" : "text-rose-500";
+        majorHtml.innerHTML = `
+            <div class="level-header" onclick="this.parentElement.classList.toggle('expanded'); this.nextElementSibling?.classList.toggle('hidden');">
+                <span class="font-black text-sm ${color}">${major.title}</span>
+                <div class="flex items-center gap-2">
+                    <span class="font-black text-sm">${majorVal.toLocaleString()}<span class="currency-symbol">원</span></span>
+                    <svg class="chevron w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin='round' stroke-width='3' d='M19 9l-7 7-7-7'></path></svg>
+                </div>
+            </div>
+            <div class="level-2-container hidden"></div>
+        `;
+        const l2Container = majorHtml.querySelector('.level-2-container');
+        major.sub.forEach(middle => {
+            const middleVal = findVal(middle.kw);
+            const middleHtml = document.createElement('div');
+            middleHtml.className = 'level-2';
+            middleHtml.innerHTML = `
+                <div class="level-header py-4 px-6" onclick="this.parentElement.classList.toggle('expanded'); this.nextElementSibling?.classList.toggle('hidden');">
+                    <span class="text-[13px] font-bold text-zinc-400">${middle.title}</span>
+                    <div class="flex items-center gap-2">
+                        <span class="text-[13px] font-bold text-zinc-300">${middleVal.toLocaleString()}원</span>
+                        ${middle.sub ? `<svg class="chevron w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'></path></svg>` : ''}
+                    </div>
+                </div>
+                <div class="level-3-container hidden"></div>
+            `;
+            if (middle.sub) {
+                const l3Container = middleHtml.querySelector('.level-3-container');
+                middle.sub.forEach(small => {
+                    const smallVal = findVal([small]);
+                    l3Container.innerHTML += `<div class="level-3"><span>${small}</span><span class="font-bold">${smallVal.toLocaleString()}원</span></div>`;
+                });
+            }
+            l2Container.appendChild(middleHtml);
+        });
+        listContainer.appendChild(majorHtml);
+      });
+    }
+
+    function findVal(kws) {
+        if (!state.data) return 0;
+        const list = state.data.pnlData || [];
+        const item = list.find(i => kws.some(k => i.label.replace(/\s/g, "").includes(k.replace(/\s/g, ""))));
+        return item ? item.value : 0;
+    }
+
+    function switchBranch(name) {
+      state.branch = name;
+      document.getElementById('btnWondang').classList.toggle('active', name === '원당점');
+      document.getElementById('btnBaekseok').classList.toggle('active', name === '백석점');
+      loadData();
+    }
+
+    function switchTab(tab, el) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      el.classList.add('active');
+      document.getElementById('plContent').classList.toggle('hidden', tab !== 'pl');
+      document.getElementById('analysisContent').classList.toggle('hidden', tab !== 'analysis');
+    }
+  </script>
+</body>
+</html>
