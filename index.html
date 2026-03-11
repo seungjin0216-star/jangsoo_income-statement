@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>장수한우 Dashboard v17.0</title>
+  <title>장수한우 Dashboard v17.1</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -33,58 +33,67 @@
     .selection-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 0 15px 15px; }
     .select-card { background: var(--card); border-radius: 15px; padding: 15px; border: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; cursor: pointer; transition: 0.2s; }
     .select-card.active { border-color: var(--red); background: linear-gradient(145deg, #2a1010, #1a1a1a); }
-    .select-card span { font-size: 12px; color: var(--text-dim); font-weight: bold; }
-    .select-card p { font-size: 16px; font-weight: 800; color: var(--text-dim); }
+    .select-card span { font-size: 10px; color: var(--text-dim); font-weight: bold; text-transform: uppercase; }
+    .select-card p { font-size: 15px; font-weight: 800; color: var(--text-dim); }
     .select-card.active p { color: white; }
 
     .date-grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 10px; padding: 0 15px 15px; }
-    .date-box { background: var(--card); border-radius: 12px; border: 1px solid var(--border); padding: 10px; color: white; text-align: center; font-weight: bold; font-size: 15px; appearance: none; width: 100%; }
+    .date-box { background: var(--card); border-radius: 12px; border: 1px solid var(--border); padding: 12px; color: white; text-align: center; font-weight: bold; font-size: 15px; appearance: none; width: 100%; outline: none; }
 
     /* 메인 요약 카드 */
     .summary-card { margin: 0 15px 20px; padding: 25px; background: var(--red); border-radius: 25px; box-shadow: 0 10px 30px rgba(220, 38, 38, 0.3); position: relative; overflow: hidden; }
     .summary-card::after { content: "🥩"; position: absolute; right: -10px; bottom: -10px; font-size: 100px; opacity: 0.1; }
     .summary-card .label { font-size: 13px; font-weight: bold; opacity: 0.8; margin-bottom: 8px; }
-    .summary-card .value { font-size: 36px; font-weight: 900; letter-spacing: -1px; margin-bottom: 4px; }
+    .summary-card .value { font-size: 34px; font-weight: 900; letter-spacing: -1px; margin-bottom: 4px; }
     .summary-card .date { font-size: 12px; opacity: 0.7; }
 
     /* 하단 탭 메뉴 */
     .tab-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #111; border-top: 1px solid #222; display: flex; height: 75px; z-index: 100; padding-bottom: env(safe-area-inset-bottom); }
     .tab-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: #555; cursor: pointer; transition: 0.3s; }
     .tab-item.active { color: var(--red); }
-    .tab-item i { font-size: 20px; margin-bottom: 2px; }
-    .tab-item span { font-size: 11px; font-weight: bold; }
+    .tab-item i { font-size: 18px; margin-bottom: 2px; }
+    .tab-item span { font-size: 10px; font-weight: bold; }
 
     /* 컨텐츠 영역 */
     .content-section { display: none; padding: 0 15px; animation: fadeIn 0.3s ease-out; }
     .content-section.active { display: block; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-    /* 리스트 스타일 (손익계산서) */
-    .pnl-item { background: var(--card); margin-bottom: 10px; padding: 18px; border-radius: 15px; border: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
-    .pnl-label { font-size: 14px; font-weight: bold; color: var(--text-dim); }
-    .pnl-value { font-size: 16px; font-weight: 800; }
+    /* 아코디언 리스트 스타일 */
+    .accordion-item { background: var(--card); border-radius: 18px; margin-bottom: 12px; border: 1px solid var(--border); overflow: hidden; }
+    .accordion-header { padding: 20px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+    .accordion-header:active { background: #222; }
+    .acc-label { font-size: 14px; font-weight: 700; color: var(--text-dim); }
+    .acc-value { font-size: 16px; font-weight: 900; }
+    
+    .accordion-content { display: none; padding: 0 20px 20px; background: #1e1e1e; }
+    .accordion-content.active { display: block; }
+    .detail-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #333; font-size: 13px; color: var(--text-dim); }
+    .detail-row:last-child { border-bottom: none; }
+    .detail-row span:last-child { color: white; font-weight: 600; }
 
     /* 비율 분석 */
     .ratio-card { background: var(--card); border-radius: 20px; padding: 20px; border: 1px solid var(--border); margin-bottom: 15px; }
-    .ratio-row { margin-bottom: 15px; }
-    .ratio-info { display: flex; justify-content: space-between; font-size: 13px; font-weight: bold; margin-bottom: 6px; }
+    .ratio-title { font-size: 15px; font-weight: 900; margin-bottom: 20px; display: flex; justify-content: space-between; }
+    .ratio-row { margin-bottom: 18px; }
+    .ratio-info { display: flex; justify-content: space-between; font-size: 12px; font-weight: bold; margin-bottom: 6px; }
     .ratio-bar-bg { background: #333; height: 8px; border-radius: 4px; overflow: hidden; }
     .ratio-bar-fill { height: 100%; border-radius: 4px; transition: 1s ease-out; width: 0; }
 
-    /* 차트 */
-    .chart-container { background: var(--card); border-radius: 20px; padding: 15px; border: 1px solid var(--border); margin-bottom: 15px; height: 300px; }
+    /* 차트 전용 */
+    .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+    .chart-container { background: var(--card); border-radius: 20px; padding: 15px; border: 1px solid var(--border); margin-bottom: 15px; height: 350px; }
 
-    /* 목표 설정 */
-    .goal-card { background: var(--card); border-radius: 20px; padding: 25px; border: 1px solid var(--border); }
-    .goal-input-group { margin-bottom: 20px; }
-    .goal-input-group label { display: block; font-size: 12px; color: var(--text-dim); font-weight: bold; margin-bottom: 8px; }
-    .goal-input-group input { width: 100%; background: var(--input); border: 1px solid var(--border); padding: 12px; border-radius: 10px; color: white; font-size: 16px; font-weight: bold; }
-    .goal-btn { width: 100%; padding: 15px; background: var(--red); color: white; border: none; border-radius: 12px; font-weight: 800; margin-top: 10px; }
+    /* 목표 설정 (Picker 방식) */
+    .goal-card { background: var(--card); border-radius: 25px; padding: 25px; border: 1px solid var(--border); }
+    .goal-picker-wrap { display: flex; gap: 10px; margin-bottom: 20px; }
+    .goal-picker-wrap div { flex: 1; }
+    .goal-picker-wrap label { display: block; font-size: 11px; color: var(--text-dim); font-weight: bold; margin-bottom: 8px; text-align: center; }
+    .goal-select { width: 100%; background: var(--input); border: 1px solid var(--border); padding: 12px; border-radius: 12px; color: white; font-size: 16px; font-weight: 900; text-align: center; }
     
-    .goal-compare { margin-top: 25px; border-top: 1px dashed #444; pt: 20px; }
-    .goal-stat { display: flex; justify-content: space-between; margin-top: 15px; }
-    .goal-stat div:last-child { text-align: right; }
-    .goal-pct { font-size: 24px; font-weight: 900; color: var(--yellow); }
+    .goal-btn { width: 100%; padding: 18px; background: var(--red); color: white; border: none; border-radius: 15px; font-weight: 900; font-size: 15px; margin-top: 10px; box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4); }
+    .goal-stat { display: flex; justify-content: space-between; margin-top: 25px; align-items: flex-end; }
+    .goal-pct { font-size: 32px; font-weight: 900; color: var(--yellow); letter-spacing: -1px; }
 
     .hidden { display: none !important; }
   </style>
@@ -93,7 +102,7 @@
   <div class="loading" id="loader"><div class="spinner"></div><p style="margin-top:15px; font-size:13px; font-weight:bold;">데이터 동기화 중...</p></div>
 
   <header class="header">
-    <h1><span>🍊</span> 장수한우곱창 손익계산서</h1>
+    <h1><span>🥩</span> 장수한우곱창 통합 대시보드</h1>
   </header>
 
   <!-- 지점 선택 카드 -->
@@ -124,78 +133,77 @@
 
   <!-- 요약 카드 -->
   <div class="summary-card">
-    <div class="label">매출 순 이익</div>
+    <div class="label">이번 달 정산 순이익</div>
     <div class="value" id="totalProfit">-</div>
-    <div class="date" id="baseDate">데이터 집계 중...</div>
+    <div class="date" id="baseDate">정산 데이터 집계 중...</div>
   </div>
 
-  <!-- 컨텐츠 섹션: 손익계산서 -->
+  <!-- [탭 1] 손익계산서 -->
   <div id="sec-pnl" class="content-section active">
-    <div id="pnlList"></div>
+    <div id="pnlAccordionContainer"></div>
   </div>
 
-  <!-- 컨텐츠 섹션: 비율 분석 -->
+  <!-- [탭 2] 비율 분석 -->
   <div id="sec-ratio" class="content-section">
-    <div class="ratio-card" id="ratioContent">
-      <p style="text-align:center; color:#555; padding:40px;">데이터를 불러오는 중...</p>
-    </div>
+    <div class="ratio-card" id="ratioContent"></div>
+    <div id="bepAnalysis" class="ratio-card" style="background: linear-gradient(145deg, #111, #1a1a1a);"></div>
   </div>
 
-  <!-- 컨텐츠 섹션: 월별 추이 -->
+  <!-- [탭 3] 월별 추이 -->
   <div id="sec-trend" class="content-section">
+    <div class="chart-header">
+      <h3 style="font-size:15px; font-weight:900;">📈 연간 매출액 추이</h3>
+      <select class="date-box" id="trendYearSel" style="width:100px; padding:8px;" onchange="renderTrendChart()">
+        <option value="2025">2025년</option>
+        <option value="2026" selected>2026년</option>
+      </select>
+    </div>
     <div class="chart-container">
       <canvas id="trendChart"></canvas>
     </div>
-    <p style="font-size:11px; color:#555; text-align:center;">최근 6개월 매출 및 순이익 변화 추이</p>
   </div>
 
-  <!-- 컨텐츠 섹션: 목표 설정 -->
+  <!-- [탭 4] 목표 설정 -->
   <div id="sec-goal" class="content-section">
     <div class="goal-card">
-      <div class="goal-input-group">
-        <label>월 목표 매출액 (원)</label>
-        <input type="number" id="goalRevInput" placeholder="예: 50000000">
+      <div class="goal-picker-wrap">
+        <div>
+          <label>억 단위</label>
+          <select id="goalBillions" class="goal-select">
+            <option value="0">0억</option><option value="1">1억</option><option value="2">2억</option>
+          </select>
+        </div>
+        <div>
+          <label>천만 단위</label>
+          <select id="goalMillions" class="goal-select">
+            <option value="0">0천만</option><option value="1000">1천만</option><option value="2000">2천만</option>
+            <option value="3000">3천만</option><option value="4000">4천만</option><option value="5000">5천만</option>
+            <option value="6000">6천만</option><option value="7000">7천만</option><option value="8000">8천만</option>
+            <option value="9000">9천만</option>
+          </select>
+        </div>
       </div>
-      <div class="goal-input-group">
-        <label>월 목표 순이익 (원)</label>
-        <input type="number" id="goalProfInput" placeholder="예: 15000000">
-      </div>
-      <button class="goal-btn" onclick="saveGoals()">목표치 저장하기</button>
+      <button class="goal-btn" onclick="saveGoals()">이번 달 목표 저장</button>
 
-      <div class="goal-compare">
-        <div class="goal-stat">
-          <div><p style="font-size:12px; color:var(--text-dim);">매출 달성률</p><p class="goal-pct" id="revPct">0%</p></div>
-          <div><p style="font-size:12px; color:var(--text-dim);">현재 매출</p><p style="font-weight:bold;" id="currRev">-</p></div>
-        </div>
-        <div class="goal-stat">
-          <div><p style="font-size:12px; color:var(--text-dim);">순이익 달성률</p><p class="goal-pct" id="profPct" style="color:var(--blue);">0%</p></div>
-          <div><p style="font-size:12px; color:var(--text-dim);">현재 이익</p><p style="font-weight:bold;" id="currProf">-</p></div>
-        </div>
+      <div class="goal-stat">
+        <div><p style="font-size:11px; color:var(--text-dim); font-weight:bold; margin-bottom:5px;">실시간 매출 달성률</p><p class="goal-pct" id="revPct">0%</p></div>
+        <div style="text-align:right;"><p style="font-size:11px; color:var(--text-dim); font-weight:bold; margin-bottom:5px;">현재 매출액</p><p style="font-weight:900; font-size:16px;" id="currRev">-</p></div>
       </div>
     </div>
   </div>
 
   <!-- 하단 네비게이션 -->
   <nav class="tab-bar">
-    <div class="tab-item active" onclick="switchTab('pnl', this)">
-      <i>📋</i><span>손익계산서</span>
-    </div>
-    <div class="tab-item" onclick="switchTab('ratio', this)">
-      <i>📊</i><span>비율 분석</span>
-    </div>
-    <div class="tab-item" onclick="switchTab('trend', this)">
-      <i>📈</i><span>월별 추이</span>
-    </div>
-    <div class="tab-item" onclick="switchTab('goal', this)">
-      <i>🎯</i><span>목표 설정</span>
-    </div>
+    <div class="tab-item active" onclick="switchTab('pnl', this)"><i>📋</i><span>손익계산서</span></div>
+    <div class="tab-item" onclick="switchTab('ratio', this)"><i>📊</i><span>비율 분석</span></div>
+    <div class="tab-item" onclick="switchTab('trend', this)"><i>📈</i><span>월별 추이</span></div>
+    <div class="tab-item" onclick="switchTab('goal', this)"><i>🎯</i><span>목표 설정</span></div>
   </nav>
 
   <script>
     const CONFIG = {
       url: 'https://script.google.com/macros/s/AKfycbzuiDeyu-WmpGbCg_lZc3Gq0X0hmSk18Lasxicr_Gag1cu2b11JiIbftwfurLoWLbUR/exec',
-      token: '940216', 
-      branch: '원당점'
+      token: '940216', branch: '원당점'
     };
 
     let cachedData = null;
@@ -223,142 +231,168 @@
       const year = document.getElementById('yearSel').value;
       const month = document.getElementById('monthSel').value;
       loader.classList.remove('hidden');
-      
       try {
         const res = await fetch(`${CONFIG.url}?token=${CONFIG.token}&branch=${CONFIG.branch}&year=${year}&month=${month}&action=getProfitLoss`);
         const data = await res.json();
         if (data.success) {
           cachedData = data;
           renderPnL(data);
-          updateGoalUI();
-        } else {
-          alert("데이터를 찾을 수 없습니다: " + data.message);
-        }
-      } catch (e) {
-        alert("서버 연결 실패! 인터넷 상태나 배포 URL을 확인하세요.");
-      } finally {
-        loader.classList.add('hidden');
-      }
+        } else { alert("데이터 오류: " + data.message); }
+      } catch (e) { alert("서버 연결 실패!"); }
+      finally { loader.classList.add('hidden'); }
     }
 
     function renderPnL(data) {
-      const getV = (k) => data.pnlData.find(i => i.label.includes(k))?.value || 0;
+      const getV = (k) => data.pnlData.find(i => i.label.replace(/\s/g,"").includes(k.replace(/\s/g,"")))?.value || 0;
       const profit = getV("순이익") || getV("매출순이익");
-      
       document.getElementById('totalProfit').innerText = profit.toLocaleString() + "원";
-      document.getElementById('baseDate').innerText = data.latestDay !== "-" ? `${data.latestDay}일 영업 종료 기준 리포트` : "정산 데이터 집계 중";
+      document.getElementById('baseDate').innerText = data.latestDay !== "-" ? `'${data.latestDay}일' 영업 종료 기준 리포트` : "데이터 집계 중";
       
-      const list = document.getElementById('pnlList');
-      list.innerHTML = "";
+      const container = document.getElementById('pnlAccordionContainer');
+      container.innerHTML = "";
       
-      data.pnlData.forEach(item => {
-        let color = "white";
-        if(item.label.includes("매출액") || item.label.includes("이익")) color = "var(--blue)";
-        if(item.label.includes("원가") || item.label.includes("지출") || item.label.includes("관리비")) color = "var(--red)";
+      // 아코디언 그룹 정의
+      const groups = [
+        { title: "1. 매출액 (+)", color: "var(--blue)", keywords: ["현금매출", "카드매출"], val: getV("매출액") },
+        { title: "2. 매출원가 (-)", color: "var(--red)", val: getV("매출원가"), subGroups: [
+          { title: "└ 육류원가", keywords: ["고기값", "특양"], val: 0 },
+          { title: "└ 식자재&공산품원가", keywords: ["미락", "콩나물", "마트"], val: 0 },
+          { title: "└ 주류원가", keywords: ["주류원가"], val: getV("주류원가") },
+          { title: "└ 음료원가", keywords: ["음료원가"], val: getV("음료원가") }
+        ]},
+        { title: "3. 매출이익", color: "var(--blue)", val: getV("매출이익") },
+        { title: "4. 인건비 (-)", color: "var(--red)", val: getV("인건비"), keywords: ["직원급여", "알바급여"] },
+        { title: "5. 임대료 (-)", color: "var(--red)", val: getV("임대료") },
+        { title: "6. 고정비 (-)", color: "var(--red)", val: getV("고정비"), keywords: ["보험", "정수기", "세무", "위생"] },
+        { title: "7. 변동비 (-)", color: "var(--red)", val: getV("변동비"), keywords: ["수수료", "관리비", "가스", "수도", "통신", "광고"] },
+        { title: "8. 영업이익", color: "var(--blue)", val: getV("영업이익") },
+        { title: "9. 세금예수금 (-)", color: "var(--red)", val: getV("세금예수금"), keywords: ["부가세예수금", "종합소득세예수금"] }
+      ];
+
+      groups.forEach(group => {
+        const itemEl = document.createElement('div');
+        itemEl.className = 'accordion-item';
         
-        list.innerHTML += `
-          <div class="pnl-item">
-            <span class="pnl-label">${item.label}</span>
-            <span class="pnl-value" style="color:${color}">${item.value.toLocaleString()}원</span>
-          </div>`;
+        let detailsHtml = "";
+        if (group.subGroups) {
+          group.subGroups.forEach(sg => {
+            let sgSum = 0;
+            let rowsHtml = "";
+            data.pnlData.forEach(p => {
+              if (sg.keywords && sg.keywords.some(k => p.label.includes(k))) {
+                sgSum += p.value;
+                rowsHtml += `<div class="detail-row" style="padding-left:25px;"><span>${p.label}</span><span>${p.value.toLocaleString()}원</span></div>`;
+              }
+            });
+            detailsHtml += `<div class="detail-row" style="font-weight:bold; color:white;"><span>${sg.title}</span><span>${(sg.val || sgSum).toLocaleString()}원</span></div>` + rowsHtml;
+          });
+        } else if (group.keywords) {
+          group.keywords.forEach(k => {
+            data.pnlData.forEach(p => {
+              if (p.label.replace(/\s/g,"").includes(k)) {
+                detailsHtml += `<div class="detail-row"><span>${p.label}</span><span>${p.value.toLocaleString()}원</span></div>`;
+              }
+            });
+          } );
+        }
+
+        itemEl.innerHTML = `
+          <div class="accordion-header" onclick="this.nextElementSibling.classList.toggle('active')">
+            <span class="acc-label">${group.title}</span>
+            <span class="acc-value" style="color:${group.color}">${group.val.toLocaleString()}원</span>
+          </div>
+          <div class="accordion-content">${detailsHtml || '<p style="font-size:11px; color:#555;">세부 내역 없음</p>'}</div>
+        `;
+        container.appendChild(itemEl);
       });
     }
 
     function renderRatioAnalysis() {
       if(!cachedData) return;
       const getV = (k) => cachedData.pnlData.find(i => i.label.includes(k))?.value || 0;
-      const revenue = getV("매출액") || 1;
-      
-      const items = [
-        { l: "매출원가 (COGS)", v: getV("매출원가"), c: "#ef4444" },
-        { l: "인건비", v: getV("인건비"), c: "#f97316" },
-        { l: "임대료", v: getV("임대료"), c: "#8b5cf6" },
-        { l: "매장관리비 (전기/수도 등)", v: getV("매장관리비")+getV("가스사용료"), c: "#3b82f6" },
-        { l: "매출 순 이익률", v: getV("순이익"), c: "#10b981" }
-      ];
+      const rev = getV("매출액") || 1;
+      const margin = ((getV("순이익") / rev) * 100).toFixed(1);
 
-      const container = document.getElementById('ratioContent');
-      container.innerHTML = `<h3 style="font-size:15px; margin-bottom:20px;">💰 매출 대비 지출 비중</h3>`;
-      
-      items.forEach(item => {
-        const pct = ((item.v / revenue) * 100).toFixed(1);
-        container.innerHTML += `
-          <div class="ratio-row">
-            <div class="ratio-info"><span>${item.l}</span><span>${pct}%</span></div>
-            <div class="ratio-bar-bg"><div class="ratio-bar-fill" style="width:${pct}%; background:${item.c}"></div></div>
-          </div>`;
-      });
+      document.getElementById('ratioContent').innerHTML = `
+        <div class="ratio-title"><span>📊 매출 대비 지출 비중</span><span style="color:var(--yellow)">순이익률 ${margin}%</span></div>
+        ${[
+          {l:"매출원가 (COGS)", v:getV("매출원가"), c:"#ef4444"},
+          {l:"인건비", v:getV("인건비"), c:"#f97316"},
+          {l:"임대료/관리비", v:getV("임대료")+getV("매장관리비"), c:"#3b82f6"},
+          {l:"기타 고정/변동비", v:getV("고정비")+getV("변동비"), c:"#8b5cf6"}
+        ].map(item => {
+          const pct = ((item.v / rev) * 100).toFixed(1);
+          return `<div class="ratio-row"><div class="ratio-info"><span>${item.l}</span><span>${pct}%</span></div>
+                  <div class="ratio-bar-bg"><div class="ratio-bar-fill" style="width:${pct}%; background:${item.c}"></div></div></div>`;
+        }).join('')}
+      `;
+
+      const fixedTotal = getV("인건비") + getV("임대료") + getV("고정비");
+      const varRatio = (getV("매출원가") + getV("변동비")) / rev;
+      const bep = Math.round(fixedTotal / (1 - varRatio));
+      document.getElementById('bepAnalysis').innerHTML = `
+        <div class="ratio-info"><span style="color:var(--text-dim)">🛡️ 예상 손익분기점(BEP) 매출액</span></div>
+        <div style="font-size:22px; font-weight:900; margin:10px 0;">약 ${Math.round(bep/10000).toLocaleString()}만원</div>
+        <p style="font-size:11px; color:#666;">*고정비 및 변동비율 기반 자동 계산값입니다.</p>
+      `;
     }
 
     async function renderTrendChart() {
       const ctx = document.getElementById('trendChart').getContext('2d');
       if(trendChartObj) trendChartObj.destroy();
-
-      // 실제로는 trend action API를 호출해야 하지만, 여기서는 현재 달 기준 샘플 추이를 보여주거나 API 연동 로직을 작성합니다.
-      // 사장님 백엔드에 action=getTrendData 가 구현되어 있다고 가정합니다.
+      const year = document.getElementById('trendYearSel').value;
+      
       try {
-        const res = await fetch(`${CONFIG.url}?token=${CONFIG.token}&branch=${CONFIG.branch}&action=getTrendData`);
+        const res = await fetch(`${CONFIG.url}?token=${CONFIG.token}&branch=${CONFIG.branch}&action=getTrendData&year=${year}`);
         const result = await res.json();
-        
         if(result.success) {
-          const labels = result.trend.map(t => t.month);
-          const revs = result.trend.map(t => t.revenue);
-          const profs = result.trend.map(t => t.profit);
+          const labels = ["1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월"];
+          const data = new Array(12).fill(0);
+          result.trend.forEach(t => {
+            const mIdx = parseInt(t.month.replace("월","")) - 1;
+            data[mIdx] = t.revenue;
+          });
 
           trendChartObj = new Chart(ctx, {
             type: 'line',
             data: {
               labels: labels,
-              datasets: [
-                { label: '매출액', data: revs, borderColor: '#3b82f6', tension: 0.4, fill: false },
-                { label: '순이익', data: profs, borderColor: '#dc2626', tension: 0.4, fill: false }
-              ]
+              datasets: [{ label: '매출액', data: data, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', fill: true, tension: 0.4 }]
             },
             options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: { legend: { labels: { color: '#fff', font: { weight: 'bold' } } } },
+              responsive: true, maintainAspectRatio: false,
+              plugins: { legend: { display: false } },
               scales: {
-                y: { grid: { color: '#222' }, ticks: { color: '#888', font: { size: 10 } } },
+                y: { grid: { color: '#222' }, ticks: { color: '#666', font: { size: 10 }, callback: v => v/10000 + '만' } },
                 x: { grid: { display: false }, ticks: { color: '#888' } }
               }
             }
           });
         }
-      } catch(e) {
-          console.log("Trend API 호출 실패 - 샘플 데이터 표시");
-      }
+      } catch(e) { console.log("Trend load error"); }
     }
 
-    // 목표 설정 관련 로직
     function saveGoals() {
-      const r = document.getElementById('goalRevInput').value;
-      const p = document.getElementById('goalProfInput').value;
-      localStorage.setItem('jangsu_goal_rev', r);
-      localStorage.setItem('jangsu_goal_prof', p);
-      alert("이번 달 목표가 저장되었습니다!");
+      const b = document.getElementById('goalBillions').value;
+      const m = document.getElementById('goalMillions').value;
+      const total = (parseInt(b) * 100000000) + (parseInt(m) * 10000);
+      localStorage.setItem('jangsu_goal_val', total);
+      localStorage.setItem('jangsu_goal_bill', b);
+      localStorage.setItem('jangsu_goal_mill', m);
+      alert("목표가 저장되었습니다!");
       updateGoalUI();
     }
 
     function updateGoalUI() {
-      const gRev = localStorage.getItem('jangsu_goal_rev') || 0;
-      const gProf = localStorage.getItem('jangsu_goal_prof') || 0;
-      document.getElementById('goalRevInput').value = gRev;
-      document.getElementById('goalProfInput').value = gProf;
+      const gVal = parseInt(localStorage.getItem('jangsu_goal_val') || 0);
+      document.getElementById('goalBillions').value = localStorage.getItem('jangsu_goal_bill') || 0;
+      document.getElementById('goalMillions').value = localStorage.getItem('jangsu_goal_mill') || 0;
 
       if(!cachedData) return;
-      const getV = (k) => cachedData.pnlData.find(i => i.label.includes(k))?.value || 0;
-      const cRev = getV("매출액");
-      const cProf = getV("순이익");
-
-      document.getElementById('currRev').innerText = cRev.toLocaleString() + "원";
-      document.getElementById('currProf').innerText = cProf.toLocaleString() + "원";
-      
-      const revPct = gRev > 0 ? Math.min(100, (cRev / gRev) * 100).toFixed(1) : 0;
-      const profPct = gProf > 0 ? Math.min(100, (cProf / gProf) * 100).toFixed(1) : 0;
-
-      document.getElementById('revPct').innerText = revPct + "%";
-      document.getElementById('profPct').innerText = profPct + "%";
+      const currRev = cachedData.pnlData.find(i => i.label.includes("매출액"))?.value || 0;
+      document.getElementById('currRev').innerText = currRev.toLocaleString() + "원";
+      const pct = gVal > 0 ? Math.min(100, (currRev / gVal) * 100).toFixed(1) : 0;
+      document.getElementById('revPct').innerText = pct + "%";
     }
 
     window.onload = loadData;
