@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="장수한우">
-  <title>장수한우곱창 손익계산서</title>
+  <title>장수한우곱창 v16.0</title>
   
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -20,91 +20,91 @@
     }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Apple SD Gothic Neo', sans-serif; background: var(--bg-primary); color: var(--text-primary); min-height: 100vh; padding-bottom: 60px; }
     
+    /* 로딩 애니메이션 */
     .loading-screen { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg-primary); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; }
     .loading-spinner { width: 50px; height: 50px; border: 4px solid var(--bg-tertiary); border-top-color: var(--accent-red); border-radius: 50%; animation: spin 1s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .loading-text { margin-top: 20px; color: var(--text-secondary); font-size: 14px; }
     
+    /* 로그인 화면 */
     .login-container { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg-primary); align-items: center; justify-content: center; z-index: 9998; padding: 20px; }
     .login-box { background: var(--bg-secondary); padding: 40px; border-radius: 16px; width: 100%; max-width: 400px; text-align: center; }
     .login-title { font-size: 24px; font-weight: 700; margin-bottom: 10px; background: linear-gradient(135deg, var(--accent-red), var(--accent-yellow)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
     .login-input { width: 100%; padding: 16px; background: var(--bg-tertiary); border: 2px solid var(--border-color); border-radius: 12px; color: var(--text-primary); font-size: 18px; text-align: center; letter-spacing: 4px; margin-bottom: 20px; }
     .login-btn { width: 100%; padding: 16px; background: var(--accent-red); border: none; border-radius: 12px; color: white; font-size: 16px; font-weight: 600; cursor: pointer; }
     
+    /* 상단 헤더 */
     .header { background: var(--bg-secondary); padding: 20px; text-align: center; border-bottom: 1px solid var(--border-color); position: sticky; top: 0; z-index: 100; }
-    .app-title { font-size: 20px; font-weight: 700; background: linear-gradient(135deg, var(--accent-red), var(--accent-yellow)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .app-title { font-size: 18px; font-weight: 800; background: linear-gradient(135deg, var(--accent-red), var(--accent-yellow)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
     
-    .branch-selector { display: flex; gap: 12px; padding: 16px; background: var(--bg-secondary); }
-    .branch-btn { flex: 1; padding: 16px; background: var(--bg-tertiary); border: 2px solid var(--border-color); border-radius: 12px; color: var(--text-secondary); font-size: 16px; font-weight: 600; cursor: pointer; }
-    .branch-btn.active { background: var(--accent-red); border-color: var(--accent-red); color: white; }
+    /* 지점 선택 */
+    .branch-selector { display: flex; gap: 10px; padding: 16px; background: var(--bg-secondary); }
+    .branch-btn { flex: 1; padding: 14px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-secondary); font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+    .branch-btn.active { background: var(--accent-red); border-color: var(--accent-red); color: white; transform: scale(1.02); }
     
-    .date-selector { display: flex; gap: 12px; padding: 16px; background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); }
-    .date-picker { flex: 1; padding: 12px 16px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-primary); font-size: 15px; text-align: center; cursor: pointer; }
+    /* 날짜 선택 */
+    .date-selector { display: flex; gap: 8px; padding: 12px 16px; background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); }
+    .date-picker { flex: 1; padding: 10px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary); font-size: 14px; text-align: center; }
     
-    .summary-card { margin: 16px; padding: 24px; background: linear-gradient(135deg, var(--accent-red), #b91c1c); border-radius: 16px; box-shadow: 0 8px 24px rgba(220, 38, 38, 0.3); }
-    .summary-label { color: rgba(255, 255, 255, 0.8); font-size: 14px; margin-bottom: 8px; }
-    .summary-value { font-size: 32px; font-weight: 700; color: white; margin-bottom: 8px; }
-    .summary-date { color: rgba(255, 255, 255, 0.7); font-size: 13px; }
+    /* 메인 요약 카드 */
+    .summary-card { margin: 16px; padding: 24px; background: linear-gradient(135deg, #1e1e1e, #000); border: 1px solid var(--border-color); border-radius: 20px; position: relative; overflow: hidden; }
+    .summary-card::before { content: ""; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: radial-gradient(circle, rgba(220,38,38,0.1) 0%, transparent 70%); pointer-events: none; }
+    .summary-label { color: var(--text-secondary); font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+    .summary-value { font-size: 28px; font-weight: 800; color: white; margin-bottom: 4px; }
+    .summary-date { color: var(--accent-red); font-size: 12px; font-weight: 700; }
     
-    .tabs { display: flex; background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); overflow-x: auto; }
-    .tab { flex: 1; min-width: 80px; padding: 16px 12px; background: none; border: none; border-bottom: 3px solid transparent; color: var(--text-secondary); font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
-    .tab.active { color: var(--accent-red); border-bottom-color: var(--accent-red); }
+    /* 탭 메뉴 */
+    .tabs { display: flex; background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); }
+    .tab { flex: 1; padding: 16px; background: none; border: none; border-bottom: 3px solid transparent; color: var(--text-secondary); font-size: 14px; font-weight: 700; cursor: pointer; }
+    .tab.active { color: var(--text-primary); border-bottom-color: var(--accent-red); }
     
+    /* 아코디언 스타일 */
     .tab-content { display: none; padding: 16px; }
     .tab-content.active { display: block; }
-    
-    .accordion-item { background: var(--bg-secondary); border-radius: 12px; margin-bottom: 12px; overflow: hidden; }
+    .accordion-item { background: var(--bg-secondary); border-radius: 12px; margin-bottom: 10px; border: 1px solid var(--border-color); }
     .accordion-header { display: flex; justify-content: space-between; align-items: center; padding: 18px; cursor: pointer; }
-    .accordion-label { font-size: 15px; font-weight: 600; color: var(--text-primary); }
-    .accordion-value { font-size: 16px; font-weight: 700; color: var(--text-primary); }
-    .accordion-value.positive { color: var(--accent-blue); }
-    .accordion-value.negative { color: var(--accent-red); }
+    .accordion-label { font-size: 14px; font-weight: 700; }
+    .accordion-value { font-size: 15px; font-weight: 800; }
+    .positive { color: var(--accent-blue); }
+    .negative { color: var(--accent-red); }
     .accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
-    .accordion-content.active { max-height: 2000px; }
+    .accordion-content.active { max-height: 1000px; }
     .accordion-details { padding: 0 18px 18px 18px; }
-    .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border-color); font-size: 14px; }
-    
-    .sub-accordion { margin: 8px 0; }
-    .sub-accordion-header { padding: 8px 0; cursor: pointer; display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-color); }
-    .sub-accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; padding-left: 16px; }
-    .sub-accordion-content.active { max-height: 500px; }
-    
-    .chart-container { background: var(--bg-secondary); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
-    .chart-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: var(--text-primary); }
-    canvas { width: 100% !important; height: auto !important; max-height: 250px; }
-    
-    .ratio-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-    .ratio-card { background: var(--bg-secondary); border-radius: 12px; padding: 16px; text-align: center; }
-    .ratio-label { font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; }
-    .ratio-value { font-size: 24px; font-weight: 700; color: var(--text-primary); }
+    .detail-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #333; font-size: 13px; color: var(--text-secondary); }
+    .detail-row span:last-child { color: var(--text-primary); font-weight: 600; }
+
+    /* 차트 컨테이너 */
+    .chart-container { background: var(--bg-secondary); border-radius: 12px; padding: 20px; margin-bottom: 16px; border: 1px solid var(--border-color); }
+    .chart-title { font-size: 14px; font-weight: 700; margin-bottom: 12px; color: var(--text-secondary); }
 
     .hidden { display: none !important; }
-    @media (min-width: 768px) { body { max-width: 768px; margin: 0 auto; box-shadow: 0 0 40px rgba(0, 0, 0, 0.5); } }
   </style>
 </head>
 <body>
-  <!-- 로딩 -->
+
+  <!-- 로딩 스크린 -->
   <div class="loading-screen" id="loadingScreen">
     <div class="loading-spinner"></div>
-    <div class="loading-text">장수한우 장부 데이터 분석 중...</div>
+    <div class="loading-text">데이터를 실시간 동기화 중입니다...</div>
   </div>
   
-  <!-- 로그인 -->
+  <!-- 로그인 섹션 -->
   <div class="login-container" id="loginContainer">
     <div class="login-box">
-      <div class="login-title">장수한우곱창</div>
-      <input type="password" class="login-input" id="passwordInput" placeholder="비밀번호" maxlength="6" inputmode="numeric">
-      <button class="login-btn" id="loginBtn">로그인</button>
-      <div id="errorMessage" style="color:red; margin-top:10px; display:none;">비밀번호가 틀렸습니다.</div>
+      <div class="login-title">장수한우 관리 시스템</div>
+      <input type="password" class="login-input" id="passwordInput" placeholder="PASSCODE" maxlength="6" inputmode="numeric">
+      <button class="login-btn" id="loginBtn">시스템 접속</button>
+      <div id="errorMessage" style="color:var(--accent-red); margin-top:15px; font-size: 13px; font-weight: bold; display:none;">인증번호가 올바르지 않습니다.</div>
     </div>
   </div>
   
+  <!-- 메인 앱 UI -->
   <div id="mainApp" class="hidden">
-    <div class="header"><div class="app-title">🥩 장수한우곱창 통합 대시보드</div></div>
+    <div class="header"><div class="app-title">JANGSU HANU DASHBOARD v16.0</div></div>
     
     <div class="branch-selector">
-      <button class="branch-btn active" data-branch="원당점" id="branchWondang">📍 원당점</button>
-      <button class="branch-btn" data-branch="백석점" id="branchBaekseok">📍 백석점</button>
+      <button class="branch-btn active" data-branch="원당점">📍 원당본점</button>
+      <button class="branch-btn" data-branch="백석점">📍 백석점</button>
     </div>
     
     <div class="date-selector">
@@ -113,31 +113,27 @@
     </div>
     
     <div class="summary-card">
-      <div class="summary-label">매출 순 이익</div>
+      <div class="summary-label">이번 달 정산 순이익</div>
       <div class="summary-value" id="summaryValue">0원</div>
-      <div class="summary-date" id="summaryDate">-</div>
+      <div class="summary-date" id="summaryDate">장부 업데이트 대기 중</div>
     </div>
     
     <div class="tabs">
-      <button class="tab active" data-tab="pl">손익계산서</button>
-      <button class="tab" data-tab="analysis">비율 분석</button>
-      <button class="tab" data-tab="trend">월별 추이</button>
+      <button class="tab active" data-tab="pl">손익 보고서</button>
+      <button class="tab" data-tab="trend">추이 분석</button>
     </div>
     
-    <!-- 손익계산서 -->
+    <!-- 손익계산서 탭 -->
     <div class="tab-content active" data-tab-content="pl" id="plContent"></div>
     
-    <!-- 비율 분석 -->
-    <div class="tab-content" data-tab-content="analysis"><div class="ratio-grid" id="ratioGrid"></div></div>
-    
-    <!-- 월별 추이 (그래프 완성) -->
+    <!-- 월별 추이 탭 -->
     <div class="tab-content" data-tab-content="trend">
       <div class="chart-container">
-        <div class="chart-title text-blue-400">최근 6개월 매출액 흐름</div>
+        <div class="chart-title">매출액 흐름 (최근 6개월)</div>
         <canvas id="revenueChart"></canvas>
       </div>
       <div class="chart-container">
-        <div class="chart-title text-red-400">최근 6개월 순이익 흐름</div>
+        <div class="chart-title">순이익 흐름 (최근 6개월)</div>
         <canvas id="profitChart"></canvas>
       </div>
     </div>
@@ -145,202 +141,179 @@
   
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script>
-    const APP_STATE = {
-      apiEndpoint: 'https://script.google.com/macros/s/AKfycbwoN4k8uzXwYLESjWEjAfNAu-KStrOdhwobps2SLdez4rKOm928LwKF0lMfJ0PZ1hDD/exec',
-      password: null, currentBranch: '원당점', currentYear: 2026, currentMonth: 2, data: null
+    const STATE = {
+      // 🚨 사장님: 구글 스크립트 '배포 URL'을 아래에 정확히 입력해 주세요.
+      apiEndpoint: 'https://script.google.com/macros/s/AKfycbxxpiN0tmxnR1QZRYe-ALU645ABEhftO1X7V94Gk5J8cxSkdwX4K4OtSQhBjlQ9pQU0/exec',
+      token: null, branch: '원당점', year: 2026, month: 2, data: null
     };
     
-    document.addEventListener('DOMContentLoaded', init);
-    
-    function init() {
-      const saved = localStorage.getItem('jangsuhan_password');
-      if (saved) { APP_STATE.password = saved; showMainApp(); } else { showLogin(); }
+    document.addEventListener('DOMContentLoaded', () => {
+      const savedPass = localStorage.getItem('jangsu_token');
+      if (savedPass) { STATE.token = savedPass; startApp(); } else { showLogin(); }
       
-      document.getElementById('loginBtn').onclick = handleLogin;
+      document.getElementById('loginBtn').onclick = login;
       document.querySelectorAll('.branch-btn').forEach(btn => {
         btn.onclick = () => {
           document.querySelectorAll('.branch-btn').forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
-          APP_STATE.currentBranch = btn.dataset.branch;
-          loadData();
+          STATE.branch = btn.dataset.branch;
+          refreshData();
         };
       });
       
       document.querySelectorAll('.tab').forEach(tab => {
         tab.onclick = () => {
-          const tabName = tab.dataset.tab;
           document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
           document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
           tab.classList.add('active');
-          document.querySelector(`[data-tab-content="${tabName}"]`).classList.add('active');
-          if (tabName === 'trend') loadTrendData();
+          document.querySelector(`[data-tab-content="${tab.dataset.tab}"]`).classList.add('active');
+          if (tab.dataset.tab === 'trend') renderCharts();
         };
       });
       
-      initDatePickers();
-    }
+      initPickers();
+    });
 
     function showLogin() { document.getElementById('loginContainer').style.display = 'flex'; }
-    function showMainApp() { 
+    function startApp() { 
       document.getElementById('loginContainer').style.display = 'none';
       document.getElementById('mainApp').classList.remove('hidden');
-      loadData();
+      refreshData();
     }
     
-    async function handleLogin() {
-      const pw = document.getElementById('passwordInput').value.trim();
-      if (pw === '940216') {
-        APP_STATE.password = pw;
-        localStorage.setItem('jangsuhan_password', pw);
-        showMainApp();
+    function login() {
+      const input = document.getElementById('passwordInput').value.trim();
+      if (input === '940216') {
+        STATE.token = input;
+        localStorage.setItem('jangsu_token', input);
+        startApp();
       } else {
         document.getElementById('errorMessage').style.display = 'block';
       }
     }
 
-    function initDatePickers() {
+    function initPickers() {
       const yp = document.getElementById('yearPicker');
       const mp = document.getElementById('monthPicker');
+      const now = new Date();
       for (let y = 2025; y <= 2026; y++) {
         let opt = document.createElement('option'); opt.value = y; opt.innerText = y+"년";
         if(y === 2026) opt.selected = true; yp.appendChild(opt);
       }
       for (let m = 1; m <= 12; m++) {
         let opt = document.createElement('option'); opt.value = m; opt.innerText = m+"월";
-        if(m === 2) opt.selected = true; mp.appendChild(opt);
+        if(m === (now.getMonth() + 1)) opt.selected = true; mp.appendChild(opt);
       }
-      yp.onchange = (e) => { APP_STATE.currentYear = e.target.value; loadData(); };
-      mp.onchange = (e) => { APP_STATE.currentMonth = e.target.value; loadData(); };
+      STATE.month = (now.getMonth() + 1);
+      yp.onchange = (e) => { STATE.year = e.target.value; refreshData(); };
+      mp.onchange = (e) => { STATE.month = e.target.value; refreshData(); };
     }
 
-    async function loadData() {
+    async function refreshData() {
       document.getElementById('loadingScreen').style.display = 'flex';
       try {
-        const url = `${APP_STATE.apiEndpoint}?token=${APP_STATE.password}&branch=${APP_STATE.currentBranch}&year=${APP_STATE.currentYear}&month=${APP_STATE.currentMonth}&action=getProfitLoss`;
-        const res = await fetch(url);
+        const res = await fetch(`${STATE.apiEndpoint}?token=${STATE.token}&branch=${STATE.branch}&year=${STATE.year}&month=${STATE.month}&action=getProfitLoss`);
         const result = await res.json();
         if (result.success) {
-          APP_STATE.data = transformData(result.pnlData, result.latestDay);
-          renderUI();
+          STATE.data = processRawData(result.pnlData, result.latestDay);
+          renderDashboard();
+        } else {
+          alert("데이터를 가져오지 못했습니다. 시트 이름을 확인해 주세요.");
         }
-      } catch (e) { alert("서버 연결 실패"); }
+      } catch (e) { console.error(e); }
       finally { document.getElementById('loadingScreen').style.display = 'none'; }
     }
 
-    // 📈 차트 데이터 로드 및 그리기
-    let revChart, profChart;
-    async function loadTrendData() {
-      try {
-        const url = `${APP_STATE.apiEndpoint}?token=${APP_STATE.password}&branch=${APP_STATE.currentBranch}&action=getTrendData`;
-        const res = await fetch(url);
-        const result = await res.json();
-        if (result.success) {
-          const labels = result.trend.map(t => t.month);
-          const revData = result.trend.map(t => t.revenue);
-          const profData = result.trend.map(t => t.profit);
-
-          if (revChart) revChart.destroy();
-          if (profChart) profChart.destroy();
-
-          const chartOptions = {
-            responsive: true,
-            plugins: { legend: { display: false } },
-            scales: { y: { ticks: { color: '#666', callback: (v) => v/10000 + '만' } }, x: { ticks: { color: '#888' } } }
-          };
-
-          revChart = new Chart(document.getElementById('revenueChart'), {
-            type: 'line',
-            data: { labels, datasets: [{ data: revData, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', fill: true, tension: 0.4 }] },
-            options: chartOptions
-          });
-
-          profChart = new Chart(document.getElementById('profitChart'), {
-            type: 'bar',
-            data: { labels, datasets: [{ data: profData, backgroundColor: '#dc2626', borderRadius: 8 }] },
-            options: chartOptions
-          });
-        }
-      } catch (e) { console.error("Trend load failed"); }
-    }
-
-    function transformData(rawList, latestDay) {
-      const findVal = (k) => {
-        const f = rawList.find(i => i.label.replace(/\s/g, "").includes(k.replace(/\s/g, "")));
-        return f ? f.value : 0;
+    // 🛠️ 핵심 로직: v17.5 계정 과목에 맞춘 그룹화
+    function processRawData(raw, latestDay) {
+      const getVal = (key) => {
+        const found = raw.find(i => i.label.replace(/\s/g, "").includes(key.replace(/\s/g, "")));
+        return found ? found.value : 0;
       };
-      const rev = findVal("매출액");
+
+      const revTotal = getVal("매출액");
       return {
-        latestUpdatedDay: latestDay,
-        netProfit: findVal("순이익") || findVal("매출순이익") || 0,
-        revenue: { total: rev, cash: findVal("현금매출"), card: findVal("카드매출") },
+        day: latestDay,
+        profit: getVal("순이익") || getVal("매출순이익") || 0,
+        revenue: { total: revTotal, items: { "현금매출": getVal("현금매출"), "카드매출": getVal("카드매출") } },
         cogs: {
-          total: findVal("매출원가"),
-          categories: { '육류원가': findVal("육류원가"), '식자재&공산품': findVal("식자재&공산품"), '주류원가': findVal("주류원가"), '음료원가': findVal("음료원가") },
-          items: { '고기값': findVal("고기값"), '특양': findVal("특양"), '미락': findVal("미락"), '콩나물': findVal("콩나물"), '네이버주문': findVal("네이버주문"), '마트': findVal("마트"), '쿠팡': findVal("쿠팡") }
+          total: getVal("매출원가"),
+          groups: [
+            { name: "육류원가", total: getVal("고기값") + getVal("특양"), items: { "고기값": getVal("고기값"), "특양": getVal("특양") } },
+            { name: "식자재원가", total: getVal("미락") + getVal("콩나물"), items: { "미락": getVal("미락"), "콩나물": getVal("콩나물") } },
+            { name: "주류 및 음료", total: getVal("주류원가") + getVal("음료원가"), items: { "주류원가": getVal("주류원가"), "음료원가": getVal("음료원가") } }
+          ]
         },
-        grossProfit: findVal("매출이익"),
-        laborCost: { total: findVal("인건비"), items: { '직원급여': findVal("직원급여"), '알바급여': findVal("알바급여") } },
-        rent: findVal("임대료"),
-        fixedCost: { total: findVal("고정비"), items: { '화재보험': findVal("화재보험"), '정수기렌탈': findVal("정수기렌탈"), '세무사비용': findVal("세무사비용") } },
-        variableCost: { total: findVal("변동비"), items: { '카드수수료': findVal("카드수수료"), '매장관리비': findVal("매장관리비"), '가스사용료': findVal("가스사용료"), '광고비용': findVal("광고비용"), '기타비용': findVal("기타비용") } },
-        operatingProfit: findVal("영업이익"),
-        tax: { total: findVal("세금예수금"), items: { '부가세예수금': findVal("부가세예수금"), '종합소득세예수금': findVal("종합소득세예수금") } },
-        ratios: {
-          cogsRatio: rev > 0 ? (findVal("매출원가") / rev * 100) : 0,
-          laborRatio: rev > 0 ? (findVal("인건비") / rev * 100) : 0,
-          netProfitRatio: rev > 0 ? ((findVal("순이익") || findVal("매출순이익")) / rev * 100) : 0
+        expenses: {
+          total: getVal("가스사용료") + getVal("매장관리비") + getVal("기타잡비용"),
+          items: { "가스사용료": getVal("가스사용료"), "매장관리비": getVal("매장관리비"), "기타잡비용": getVal("기타잡비용") }
+        },
+        other: {
+          "매출이익": getVal("매출이익"),
+          "영업이익": getVal("영업이익")
         }
       };
     }
 
-    function renderUI() {
-      const d = APP_STATE.data;
-      if (!d) return;
-      document.getElementById('summaryValue').innerText = d.netProfit.toLocaleString() + '원';
-      document.getElementById('summaryDate').innerText = d.latestUpdatedDay !== "-" ? `'${d.latestUpdatedDay}일'까지의 리포트` : "데이터 대기 중";
+    function renderDashboard() {
+      const d = STATE.data;
+      document.getElementById('summaryValue').innerText = d.profit.toLocaleString() + '원';
+      document.getElementById('summaryDate').innerText = d.day !== "-" ? `'${d.day}일' 영업 종료 기준 리포트` : "정산 데이터 확인 중";
       
-      const pl = document.getElementById('plContent'); pl.innerHTML = '';
-      const items = [
-        { title: '매출액', value: d.revenue.total, isPositive: true, details: { '현금매출': d.revenue.cash, '카드매출': d.revenue.card } },
-        { title: '매출원가', value: d.cogs.total, isNegative: true, subCategories: [
-          { title: '육류원가', value: d.cogs.categories['육류원가'], items: { '고기값': d.cogs.items['고기값'], '특양': d.cogs.items['특양'] } },
-          { title: '식자재&공산품', value: d.cogs.categories['식자재&공산품'], items: { '미락': d.cogs.items['미락'], '콩나물': d.cogs.items['콩나물'], '네이버주문': d.cogs.items['네이버주문'], '마트': d.cogs.items['마트'], '쿠팡': d.cogs.items['쿠팡'] } },
-          { title: '주류원가', value: d.cogs.categories['주류원가'] }, { title: '음료원가', value: d.cogs.categories['음료원가'] }
-        ]},
-        { title: '매출이익', value: d.grossProfit, isPositive: true },
-        { title: '인건비', value: d.laborCost.total, isNegative: true, details: d.laborCost.items },
-        { title: '임대료', value: d.rent, isNegative: true },
-        { title: '고정비', value: d.fixedCost.total, isNegative: true, details: d.fixedCost.items },
-        { title: '변동비', value: d.variableCost.total, isNegative: true, details: d.variableCost.items },
-        { title: '영업이익', value: d.operatingProfit, isPositive: true },
-        { title: '세금예수금', value: d.tax.total, isNegative: true, details: d.tax.items },
-        { title: '매출 순 이익', value: d.netProfit, isPositive: true }
+      const container = document.getElementById('plContent');
+      container.innerHTML = '';
+      
+      const uiMap = [
+        { label: "1. 매출액 합계", val: d.revenue.total, color: "positive", sub: d.revenue.items },
+        { label: "2. 매출원가 (COGS)", val: d.cogs.total, color: "negative", groups: d.cogs.groups },
+        { label: "3. 매출이익", val: d.other["매출이익"], color: "positive" },
+        { label: "4. 운영 관리비", val: d.expenses.total, color: "negative", sub: d.expenses.items },
+        { label: "5. 영업이익", val: d.other["영업이익"], color: "positive" },
+        { label: "6. 최종 순이익", val: d.profit, color: "positive" }
       ];
-      items.forEach(i => pl.appendChild(createAccordion(i)));
 
-      const rg = document.getElementById('ratioGrid'); rg.innerHTML = '';
-      [{l:'원가율', v:d.ratios.cogsRatio}, {l:'인건비율', v:d.ratios.laborRatio}, {l:'순이익률', v:d.ratios.netProfitRatio}].forEach(r => {
-        rg.innerHTML += `<div class="ratio-card"><div class="ratio-label">${r.l}</div><div class="ratio-value">${r.v.toFixed(1)}%</div></div>`;
+      uiMap.forEach(item => {
+        const el = document.createElement('div');
+        el.className = 'accordion-item';
+        
+        let contentHtml = '';
+        if (item.sub) {
+          contentHtml = `<div class="accordion-content"><div class="accordion-details">${Object.entries(item.sub).map(([k,v]) => `<div class="detail-row"><span>${k}</span><span>${v.toLocaleString()}원</span></div>`).join('')}</div></div>`;
+        } else if (item.groups) {
+          contentHtml = `<div class="accordion-content"><div class="accordion-details">${item.groups.map(g => `
+            <div style="margin-bottom:12px;"><div style="display:flex; justify-content:space-between; font-weight:bold; margin-bottom:5px; font-size:13px; color:#ccc;"><span>${g.name}</span><span>${g.total.toLocaleString()}원</span></div>
+            ${Object.entries(g.items).map(([k,v]) => `<div class="detail-row" style="padding-left:10px; border:none; opacity:0.7;"><span>└ ${k}</span><span>${v.toLocaleString()}원</span></div>`).join('')}</div>`).join('')}</div></div>`;
+        }
+
+        el.innerHTML = `
+          <div class="accordion-header" onclick="this.nextElementSibling?.classList.toggle('active')">
+            <span class="accordion-label">${item.label}</span>
+            <span class="accordion-value ${item.color}">${item.val.toLocaleString()}원</span>
+          </div>${contentHtml}`;
+        container.appendChild(el);
       });
     }
 
-    function createAccordion(item) {
-      const div = document.createElement('div'); div.className = 'accordion-item';
-      const hasDet = (item.details && Object.keys(item.details).length > 0) || (item.subCategories && item.subCategories.length > 0);
-      let vClass = item.isPositive ? 'positive' : (item.isNegative ? 'negative' : '');
-      
-      let detH = '';
-      if (item.subCategories) {
-        detH = `<div class="accordion-content"><div class="accordion-details">${item.subCategories.map(sub => `
-          <div class="sub-accordion"><div class="sub-accordion-header" onclick="this.nextElementSibling.classList.toggle('active')"><span>${sub.title}</span><span>${sub.value.toLocaleString()}원</span></div>
-          ${sub.items ? `<div class="sub-accordion-content">${Object.entries(sub.items).map(([k,v]) => `<div class="detail-row"><span>${k}</span><span>${v.toLocaleString()}원</span></div>`).join('')}</div>` : ''}</div>`).join('')}</div></div>`;
-      } else if (item.details) {
-        detH = `<div class="accordion-content"><div class="accordion-details">${Object.entries(item.details).map(([k,v]) => `<div class="detail-row"><span>${k}</span><span>${v.toLocaleString()}원</span></div>`).join('')}</div></div>`;
-      }
-      
-      div.innerHTML = `<div class="accordion-header" ${hasDet ? 'onclick="this.nextElementSibling.classList.toggle(\'active\')"' : ''}>
-        <span class="accordion-label">${item.title}</span><span class="accordion-value ${vClass}">${item.value.toLocaleString()}원</span></div>${detH}`;
-      return div;
+    let charts = { rev: null, prof: null };
+    async function renderCharts() {
+      try {
+        const res = await fetch(`${STATE.apiEndpoint}?token=${STATE.token}&branch=${STATE.branch}&action=getTrendData`);
+        const result = await res.json();
+        if (!result.success) return;
+
+        const labels = result.trend.map(t => t.month);
+        const config = (data, color) => ({
+          type: 'line',
+          data: { labels, datasets: [{ data, borderColor: color, backgroundColor: color + '22', fill: true, tension: 0.4 }] },
+          options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { ticks: { display: false }, grid: { display: false } }, x: { grid: { display: false } } } }
+        });
+
+        if (charts.rev) charts.rev.destroy();
+        if (charts.prof) charts.prof.destroy();
+
+        charts.rev = new Chart(document.getElementById('revenueChart'), config(result.trend.map(t => t.revenue), '#3b82f6'));
+        charts.prof = new Chart(document.getElementById('profitChart'), config(result.trend.map(t => t.profit), '#dc2626'));
+      } catch (e) { console.error(e); }
     }
   </script>
 </body>
