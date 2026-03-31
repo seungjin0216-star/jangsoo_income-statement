@@ -7,8 +7,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="원당점">
   
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥩</text></svg>">
-  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥩</text></svg>">
+  <!-- 아이콘 설정: 깃허브 icons 폴더의 이미지를 직접 참조합니다 -->
+  <link rel="apple-touch-icon" href="icons/wondang-icon.png">
+  <link rel="icon" type="image/png" href="icons/wondang-icon.png">
   
   <title>장수한우곱창 - 원당점</title>
   
@@ -220,6 +221,7 @@
 
     function renderUI() {
       const d = APP_STATE.data;
+      if(!d) return;
       document.getElementById('summaryValue').textContent = formatCurrency(d.netProfit);
       document.getElementById('summaryDate').textContent = d.lastUpdatedDay !== '-' ? `'${d.lastUpdatedDay}일'까지의 손익계산서` : '데이터 업데이트 필요';
       
@@ -230,7 +232,7 @@
         { title: '매출액', value: d.revenue.total, isPositive: true, details: { '현금매출': d.revenue.cash, '카드매출': d.revenue.card } },
         { title: '매출원가', value: d.cogs.total, isNegative: true, subCategories: [
           { title: '육류원가', value: d.cogs.육류원가, items: { '고기값': d.cogs.items['고기값'], '특양': d.cogs.items['특양'] } },
-          { title: '식자재&공산품', value: d.cogs.식자재, items: { '미락': d.cogs.items['미락'], '콩나물': d.cogs.items['콩나물'], '네이버주문': d.cogs.items['네이버주문'], '마트': d.cogs.items['마트'], '쿠팡': d.cogs.items['쿠팡'] } },
+          { title: '식자재&공산품', value: d.cogs.식자재, items: { '미락': d.cogs.items['미락'], '콩나물': d.cogs.items['콩나물'], '마트': d.cogs.items['마트'] } },
           { title: '주류원가', value: d.cogs.주류원가 }, { title: '음료원가', value: d.cogs.음료원가 }
         ]},
         { title: '매출이익', value: d.grossProfit, isPositive: true },
@@ -274,7 +276,7 @@
       // 비율 분석: 사장님 요청 9대 지표 세분화
       const ratioGrid = document.getElementById('ratioGrid');
       ratioGrid.innerHTML = '';
-      const rev = d.revenue.total || 1; // 0나누기 방지
+      const rev = d.revenue.total || 1; 
       
       const ratios = [
         { l: '육류원가', v: (d.cogs.육류원가 / rev) * 100 },
