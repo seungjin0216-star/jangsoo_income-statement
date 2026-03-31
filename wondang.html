@@ -7,7 +7,6 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="원당점">
   
-  <!-- 아이콘 설정 -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥩</text></svg>">
   <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥩</text></svg>">
   
@@ -15,34 +14,18 @@
   
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    
     :root {
-      --bg-primary: #0a0a0a;
-      --bg-secondary: #1a1a1a;
-      --bg-tertiary: #2a2a2a;
-      --text-primary: #ffffff;
-      --text-secondary: #a0a0a0;
-      --accent-red: #dc2626;
-      --accent-blue: #3b82f6;
-      --accent-yellow: #fbbf24;
-      --accent-green: #22c55e;
+      --bg-primary: #0a0a0a; --bg-secondary: #1a1a1a; --bg-tertiary: #2a2a2a;
+      --text-primary: #ffffff; --text-secondary: #a0a0a0; --accent-red: #dc2626;
+      --accent-blue: #3b82f6; --accent-yellow: #fbbf24; --accent-green: #22c55e;
       --border-color: #3a3a3a;
     }
-    
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Apple SD Gothic Neo', sans-serif;
-      background: var(--bg-primary);
-      color: var(--text-primary);
-      min-height: 100vh;
-      padding-bottom: 60px;
-    }
-    
-    .loading-screen { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg-primary); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; }
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg-primary); color: var(--text-primary); min-height: 100vh; padding-bottom: 60px; }
+    .loading-screen { position: fixed; inset: 0; background: var(--bg-primary); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; }
     .loading-spinner { width: 50px; height: 50px; border: 4px solid var(--bg-tertiary); border-top-color: var(--accent-red); border-radius: 50%; animation: spin 1s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .loading-text { margin-top: 20px; color: var(--text-secondary); font-size: 14px; }
-    
-    .login-container { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg-primary); align-items: center; justify-content: center; z-index: 9998; padding: 20px; }
+    .login-container { display: none; position: fixed; inset: 0; background: var(--bg-primary); align-items: center; justify-content: center; z-index: 9998; padding: 20px; }
     .login-box { background: var(--bg-secondary); padding: 40px; border-radius: 16px; width: 100%; max-width: 400px; text-align: center; }
     .login-title { font-size: 24px; font-weight: 700; margin-bottom: 10px; background: linear-gradient(135deg, var(--accent-red), var(--accent-yellow)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
     .login-subtitle { color: var(--text-secondary); font-size: 14px; margin-bottom: 30px; }
@@ -50,26 +33,19 @@
     .login-input:focus { outline: none; border-color: var(--accent-red); }
     .login-btn { width: 100%; padding: 16px; background: var(--accent-red); border: none; border-radius: 12px; color: white; font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.3s; }
     .error-message { color: var(--accent-red); font-size: 14px; margin-top: 10px; display: none; }
-    
     .header { background: var(--bg-secondary); padding: 20px; text-align: center; border-bottom: 1px solid var(--border-color); position: sticky; top: 0; z-index: 100; }
     .app-title { font-size: 20px; font-weight: 700; background: linear-gradient(135deg, var(--accent-red), var(--accent-yellow)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
-    
     .date-selector { display: flex; gap: 12px; padding: 16px; background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); }
     .date-picker { flex: 1; padding: 12px 16px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 10px; color: var(--text-primary); font-size: 15px; text-align: center; cursor: pointer; }
-    
     .summary-card { margin: 16px; padding: 24px; background: linear-gradient(135deg, var(--accent-red), #b91c1c); border-radius: 16px; box-shadow: 0 8px 24px rgba(220, 38, 38, 0.3); }
     .summary-label { color: rgba(255, 255, 255, 0.8); font-size: 14px; margin-bottom: 8px; }
     .summary-value { font-size: 32px; font-weight: 700; color: white; margin-bottom: 8px; }
     .summary-date { color: rgba(255, 255, 255, 0.7); font-size: 13px; }
-    
-    .tabs { display: flex; background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); }
-    .tab { flex: 1; padding: 16px 12px; background: none; border: none; border-bottom: 3px solid transparent; color: var(--text-secondary); font-size: 14px; font-weight: 600; cursor: pointer; }
+    .tabs { display: flex; background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); overflow-x: auto; }
+    .tab { flex: 1; min-width: 100px; padding: 16px 12px; background: none; border: none; border-bottom: 3px solid transparent; color: var(--text-secondary); font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.3s; white-space: nowrap; }
     .tab.active { color: var(--accent-red); border-bottom-color: var(--accent-red); }
-    
     .tab-content { display: none; padding: 16px; }
     .tab-content.active { display: block; }
-    
-    /* 아코디언 스타일 */
     .accordion-item { background: var(--bg-secondary); border-radius: 12px; margin-bottom: 12px; overflow: hidden; }
     .accordion-header { display: flex; justify-content: space-between; align-items: center; padding: 18px; cursor: pointer; transition: background 0.3s; min-height: 60px; }
     .accordion-header:active { background: var(--bg-tertiary); }
@@ -81,30 +57,24 @@
     .accordion-value.negative { color: var(--accent-red); }
     .accordion-chevron { width: 20px; height: 20px; transition: transform 0.3s; color: var(--text-secondary); flex-shrink: 0; }
     .accordion-header.active .accordion-chevron { transform: rotate(180deg); }
-    
     .accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
     .accordion-content.active { max-height: 2000px; }
     .accordion-details { padding: 0 18px 18px 18px; }
-    
     .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border-color); font-size: 14px; }
     .detail-label { color: var(--text-secondary); }
     .detail-value { color: var(--text-primary); font-weight: 600; }
-    
-    /* 서브 아코디언 (육류원가 등) */
     .sub-accordion { margin: 8px 0; }
     .sub-accordion-header { padding: 8px 0; cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); }
     .sub-accordion-label { color: var(--text-secondary); font-size: 14px; }
     .sub-accordion-value { color: var(--text-primary); font-weight: 600; font-size: 14px; }
     .sub-accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; padding-left: 16px; }
     .sub-accordion-content.active { max-height: 500px; }
-    
     .ratio-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
     .ratio-card { background: var(--bg-secondary); border-radius: 12px; padding: 16px; text-align: center; }
     .ratio-label { font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; }
     .ratio-value { font-size: 24px; font-weight: 700; color: var(--text-primary); }
     .ratio-bar { height: 6px; background: var(--bg-tertiary); border-radius: 3px; margin-top: 8px; overflow: hidden; }
     .ratio-fill { height: 100%; background: linear-gradient(90deg, var(--accent-red), var(--accent-yellow)); border-radius: 3px; transition: width 0.5s ease-out; }
-    
     .hidden { display: none !important; }
   </style>
 </head>
@@ -117,7 +87,7 @@
   <div class="login-container" id="loginContainer">
     <div class="login-box">
       <div class="login-title">장수한우곱창</div>
-      <div class="login-subtitle" id="loginSubtitle">원당점 손익계산서</div>
+      <div class="login-subtitle">원당점 손익계산서</div>
       <input type="password" class="login-input" id="passwordInput" placeholder="비밀번호" maxlength="6" inputmode="numeric">
       <button class="login-btn" id="loginBtn">로그인</button>
       <div class="error-message" id="errorMessage">비밀번호가 올바르지 않습니다</div>
@@ -126,7 +96,7 @@
   
   <div id="mainApp" class="hidden">
     <div class="header">
-      <div class="app-title" id="appHeaderTitle">🥩 장수한우곱창 원당점</div>
+      <div class="app-title">🥩 장수한우곱창 원당점</div>
     </div>
     
     <div class="date-selector">
@@ -136,7 +106,7 @@
     
     <div class="summary-card">
       <div class="summary-label">매출 순 이익</div>
-      <div class="summary-value" id="summaryValue">- 원</div>
+      <div class="summary-value" id="summaryValue">-</div>
       <div class="summary-date" id="summaryDate">-</div>
     </div>
     
@@ -154,38 +124,22 @@
   
   <script>
     const APP_CONFIG = {
-      BRANCH: '원당점', // 🚨 백석점용은 여기를 '백석점'으로 수정
-      // 사장님 v18.11 최신 배포 URL
+      BRANCH: '원당점',
+      // 사장님 v18.11 서버 주소
       API_ENDPOINT: 'https://script.google.com/macros/s/AKfycby8JIFlUFJrGY7swJ9rHi79Iu5i2Qqq6gZy80WsrGNAHnx2ebctUVG0j8R17-vrmabY/exec'
     };
     
-    const APP_STATE = {
-      password: null,
-      currentYear: new Date().getFullYear(),
-      currentMonth: new Date().getMonth() + 1,
-      data: null,
-      cache: {}
-    };
+    const APP_STATE = { password: null, currentYear: 2026, currentMonth: 3, data: null };
     
     document.addEventListener('DOMContentLoaded', init);
     
     function init() {
-      // 제목 세팅
-      document.getElementById('loginSubtitle').innerText = `${APP_CONFIG.BRANCH} 손익계산서`;
-      document.getElementById('appHeaderTitle').innerText = `🥩 장수한우곱창 ${APP_CONFIG.BRANCH}`;
-
-      const savedPassword = localStorage.getItem(`jangsuhan_${APP_CONFIG.BRANCH}_password`);
-      if (savedPassword) {
-        APP_STATE.password = savedPassword;
-        showMainApp();
-      } else {
-        showLogin();
-      }
+      const savedPassword = localStorage.getItem('jangsuhan_wondang_password');
+      if (savedPassword) { APP_STATE.password = savedPassword; showMainApp(); } 
+      else { showLogin(); }
       
       document.getElementById('loginBtn').addEventListener('click', handleLogin);
-      document.getElementById('passwordInput').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') handleLogin();
-      });
+      document.getElementById('passwordInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') handleLogin(); });
       
       document.querySelectorAll('.tab').forEach(tab => {
         tab.addEventListener('click', () => {
@@ -196,173 +150,139 @@
           document.querySelector(`[data-tab-content="${tabName}"]`).classList.add('active');
         });
       });
-      
       initDatePickers();
     }
-    
-    function showLogin() {
-      document.getElementById('loadingScreen').style.display = 'none';
-      document.getElementById('loginContainer').style.display = 'flex';
-      document.getElementById('mainApp').classList.add('hidden');
-    }
-    
-    function showMainApp() {
-      document.getElementById('loadingScreen').style.display = 'none';
-      document.getElementById('loginContainer').style.display = 'none';
-      document.getElementById('mainApp').classList.remove('hidden');
-      loadData();
-    }
+
+    function showLogin() { document.getElementById('loadingScreen').style.display = 'none'; document.getElementById('loginContainer').style.display = 'flex'; }
+    function showMainApp() { document.getElementById('loadingScreen').style.display = 'none'; document.getElementById('loginContainer').style.display = 'none'; document.getElementById('mainApp').classList.remove('hidden'); loadData(); }
     
     async function handleLogin() {
-      const password = document.getElementById('passwordInput').value;
-      const errorMsg = document.getElementById('errorMessage');
-      if (password === '940216') {
-        APP_STATE.password = password;
-        localStorage.setItem(`jangsuhan_${APP_CONFIG.BRANCH}_password`, password);
-        errorMsg.style.display = 'none';
+      const pw = document.getElementById('passwordInput').value;
+      if (pw === '940216') {
+        APP_STATE.password = pw;
+        localStorage.setItem('jangsuhan_wondang_password', pw);
         showMainApp();
       } else {
-        errorMsg.style.display = 'block';
+        document.getElementById('errorMessage').style.display = 'block';
         document.getElementById('passwordInput').value = '';
       }
     }
-    
+
     function initDatePickers() {
-      const yp = document.getElementById('yearPicker');
-      const mp = document.getElementById('monthPicker');
-      for (let y = 2025; y <= 2027; y++) {
-        yp.innerHTML += `<option value="${y}" ${y === APP_STATE.currentYear ? 'selected' : ''}>${y}년</option>`;
-      }
-      for (let m = 1; m <= 12; m++) {
-        mp.innerHTML += `<option value="${m}" ${m === APP_STATE.currentMonth ? 'selected' : ''}>${m}월</option>`;
-      }
+      const yp = document.getElementById('yearPicker'); const mp = document.getElementById('monthPicker');
+      for (let y = 2025; y <= 2027; y++) { yp.innerHTML += `<option value="${y}" ${y === 2026 ? 'selected' : ''}>${y}년</option>`; }
+      for (let m = 1; m <= 12; m++) { mp.innerHTML += `<option value="${m}" ${m === 3 ? 'selected' : ''}>${m}월</option>`; }
       yp.onchange = (e) => { APP_STATE.currentYear = parseInt(e.target.value); loadData(); };
       mp.onchange = (e) => { APP_STATE.currentMonth = parseInt(e.target.value); loadData(); };
     }
-    
+
     async function loadData() {
       document.getElementById('loadingScreen').style.display = 'flex';
       try {
         const url = `${APP_CONFIG.API_ENDPOINT}?token=${APP_STATE.password}&branch=${APP_CONFIG.BRANCH}&year=${APP_STATE.currentYear}&month=${APP_STATE.currentMonth}&action=getProfitLoss`;
-        const response = await fetch(url);
-        const result = await response.json();
-        
+        const res = await fetch(url);
+        const result = await res.json();
         if (result.success) {
-          APP_STATE.data = parsePnL(result.pnlData, result.latestDay);
+          APP_STATE.data = parsePnlData(result.pnlData, result.latestDay);
           renderUI();
-        } else {
-          alert('오류: ' + result.message);
-        }
-      } catch (error) {
-        alert('서버 연결 실패');
-      } finally {
-        document.getElementById('loadingScreen').style.display = 'none';
-      }
+        } else { alert('데이터 오류: ' + result.message); }
+      } catch (e) { alert('서버 연결 실패'); }
+      finally { document.getElementById('loadingScreen').style.display = 'none'; }
     }
-    
-    function parsePnL(pnlData, latestDay) {
+
+    function parsePnlData(pnlData, latestDay) {
       const map = {};
       pnlData.forEach(item => { map[item.label.replace(/\s/g, "")] = item.value; });
-      
       const getV = (k) => map[k.replace(/\s/g, "")] || 0;
-      
+
       return {
         revenue: { total: getV('매출액'), cash: getV('현금매출'), card: getV('카드매출') },
         cogs: {
           total: getV('매출원가'),
-          육류원가: getV('고기값') + getV('특양'),
-          식자재: getV('미락') + getV('콩나물') + getV('마트') + getV('네이버주문') + getV('쿠팡'),
+          육류원가: getV('육류원가'),
+          식자재: getV('식자재&공산품'),
           주류원가: getV('주류원가'),
-          음료원가: getV('음료원가')
+          음료원가: getV('음료원가'),
+          items: {
+            '고기값': getV('고기값'), '특양': getV('특양'),
+            '미락': getV('미락'), '콩나물': getV('콩나물'), '네이버주문': getV('네이버주문'), '마트': getV('마트'), '쿠팡': getV('쿠팡')
+          }
         },
-        items: map, // 원본 맵 유지
+        grossProfit: getV('매출이익'),
+        laborCost: { total: getV('인건비'), items: { '직원급여': getV('직원급여'), '알바급여': getV('알바급여') } },
+        rent: getV('임대료'),
+        fixedCost: { total: getV('고정비'), items: { '화재보험': getV('화재보험'), '정수기렌탈': getV('정수기렌탈'), '세무사비용': getV('세무사비용') } },
+        variableCost: { total: getV('변동비'), items: { '카드수수료': getV('카드수수료'), '매장관리비': getV('매장관리비(전기,수도)'), '가스사용료': getV('가스사용료'), '광고비용': getV('광고비용'), '기타비용': getV('기타비용') } },
+        operatingProfit: getV('영업이익'),
+        tax: { total: getV('세금예수금'), items: { '부가세예수금': getV('부가세예수금'), '종합소득세예수금': getV('종합소득세예수금') } },
         netProfit: getV('순이익') || getV('매출순이익'),
-        lastDay: latestDay
+        lastUpdatedDay: latestDay
       };
     }
-    
+
     function renderUI() {
       const d = APP_STATE.data;
       document.getElementById('summaryValue').textContent = formatCurrency(d.netProfit);
-      document.getElementById('summaryDate').textContent = d.lastDay !== '-' ? `'${d.lastDay}일' 영업 종료 기준 리포트` : '정산 대기 중';
+      document.getElementById('summaryDate').textContent = d.lastUpdatedDay !== '-' ? `'${d.lastUpdatedDay}일'까지의 손익계산서` : '데이터 업데이트 필요';
       
-      renderList(d);
-      renderRatios(d);
-    }
-    
-    function renderList(d) {
       const container = document.getElementById('plContent');
       container.innerHTML = '';
       
-      const items = [
-        { title: '매출액', val: d.revenue.total, pos: true, details: { '현금매출': d.revenue.cash, '카드매출': d.revenue.card } },
-        { title: '매출원가', val: d.cogs.total, neg: true, sub: [
-          { t: '육류원가', v: d.cogs.육류원가, items: { '고기값': d.items['고기값'], '특양': d.items['특양'] } },
-          { t: '식자재&공산품', v: d.cogs.식자재, items: { '미락': d.items['미락'], '콩나물': d.items['콩나물'], '마트': d.items['마트'] } }
+      const list = [
+        { title: '매출액', value: d.revenue.total, isPositive: true, details: { '현금매출': d.revenue.cash, '카드매출': d.revenue.card } },
+        { title: '매출원가', value: d.cogs.total, isNegative: true, subCategories: [
+          { title: '육류원가', value: d.cogs.육류원가, items: { '고기값': d.cogs.items['고기값'], '특양': d.cogs.items['특양'] } },
+          { title: '식자재&공산품', value: d.cogs.식자재, items: { '미락': d.cogs.items['미락'], '콩나물': d.cogs.items['콩나물'], '마트': d.cogs.items['마트'] } },
+          { title: '주류원가', value: d.cogs.주류원가 }, { title: '음료원가', value: d.cogs.음료원가 }
         ]},
-        { title: '인건비', val: d.items['인건비'], neg: true },
-        { title: '임대료', val: d.items['임대료'], neg: true },
-        { title: '매출 순 이익', val: d.netProfit, pos: true }
+        { title: '매출이익', value: d.grossProfit, isPositive: true },
+        { title: '인건비', value: d.laborCost.total, isNegative: true, details: d.laborCost.items },
+        { title: '임대료', value: d.rent, isNegative: true },
+        { title: '고정비', value: d.fixedCost.total, isNegative: true, details: d.fixedCost.items },
+        { title: '변동비', value: d.variableCost.total, isNegative: true, details: d.variableCost.items },
+        { title: '영업이익', value: d.operatingProfit, isPositive: true },
+        { title: '세금예수금', value: d.tax.total, isNegative: true, details: d.tax.items },
+        { title: '매출 순 이익', value: d.netProfit, isPositive: true }
       ];
-      
-      items.forEach(item => container.appendChild(createAccordion(item)));
-    }
-    
-    function createAccordion(item) {
-      const div = document.createElement('div');
-      div.className = 'accordion-item';
-      const hasDetails = item.details || item.sub;
-      
-      let detailsHTML = '';
-      if (item.sub) {
-        detailsHTML = `<div class="accordion-content"><div class="accordion-details">` + 
-          item.sub.map(s => `
-            <div class="sub-accordion">
-              <div class="sub-accordion-header" onclick="this.nextElementSibling.classList.toggle('active')">
-                <span class="sub-accordion-label">${s.t}</span>
-                <span class="sub-accordion-value">${formatCurrency(s.v)}</span>
-              </div>
-              <div class="sub-accordion-content">
-                ${Object.entries(s.items || {}).map(([k, v]) => `<div class="detail-row"><span class="detail-label">${k}</span><span class="detail-value">${formatCurrency(v)}</span></div>`).join('')}
-              </div>
-            </div>
-          `).join('') + `</div></div>`;
-      } else if (item.details) {
-        detailsHTML = `<div class="accordion-content"><div class="accordion-details">` + 
-          Object.entries(item.details).map(([k, v]) => `<div class="detail-row"><span class="detail-label">${k}</span><span class="detail-value">${formatCurrency(v)}</span></div>`).join('') + 
-          `</div></div>`;
-      }
-      
-      div.innerHTML = `
-        <div class="accordion-header" onclick="${hasDetails ? "this.classList.toggle('active'); this.nextElementSibling.classList.toggle('active')" : ""}">
-          <div class="accordion-title"><div class="accordion-icon"></div><span class="accordion-label">${item.title}</span></div>
-          <div style="display:flex; align-items:center;">
-            <span class="accordion-value ${item.pos?'positive':(item.neg?'negative':'')}">${formatCurrency(item.val)}</span>
-            ${hasDetails ? '<span class="accordion-chevron">▼</span>' : ''}
-          </div>
-        </div>
-        ${detailsHTML}
-      `;
-      return div;
-    }
 
-    function renderRatios(d) {
-      const grid = document.getElementById('ratioGrid');
-      grid.innerHTML = '';
+      list.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'accordion-item';
+        const hasDetails = (item.details && Object.keys(item.details).length > 0) || (item.subCategories && item.subCategories.length > 0);
+        let colorClass = item.isPositive ? 'positive' : (item.isNegative ? 'negative' : '');
+        
+        let detailsHTML = '';
+        if (item.subCategories) {
+          detailsHTML = `<div class="accordion-content"><div class="accordion-details">` + 
+            item.subCategories.map(sub => `
+              <div class="sub-accordion">
+                <div class="sub-accordion-header" onclick="this.nextElementSibling.classList.toggle('active')">
+                  <span class="sub-accordion-label">${sub.title}</span>
+                  <span class="sub-accordion-value">${formatCurrency(sub.value)}</span>
+                </div>
+                ${sub.items ? `<div class="sub-accordion-content">${Object.entries(sub.items).map(([k, v]) => `<div class="detail-row"><span class="detail-label">${k}</span><span class="detail-value">${formatCurrency(v)}</span></div>`).join('')}</div>` : ''}
+              </div>`).join('') + `</div></div>`;
+        } else if (item.details) {
+          detailsHTML = `<div class="accordion-content"><div class="accordion-details">${Object.entries(item.details).map(([k, v]) => `<div class="detail-row"><span class="detail-label">${k}</span><span class="detail-value">${formatCurrency(v)}</span></div>`).join('')}</div></div>`;
+        }
+
+        div.innerHTML = `<div class="accordion-header" onclick="${hasDetails ? 'this.classList.toggle(\'active\'); this.nextElementSibling.classList.toggle(\'active\')' : ''}">
+          <div class="accordion-title"><div class="accordion-icon"></div><div class="accordion-label">${item.title}</div></div>
+          <div style="display:flex; align-items:center;"><div class="accordion-value ${colorClass}">${formatCurrency(item.value)}</div>${hasDetails ? '<div class="accordion-chevron">▼</div>' : ''}</div>
+        </div>${detailsHTML}`;
+        container.appendChild(div);
+      });
+
+      // 비율 차트
+      const ratioGrid = document.getElementById('ratioGrid');
+      ratioGrid.innerHTML = '';
       const rev = d.revenue.total || 1;
-      const ratios = [
-        { l: '원가율', v: (d.cogs.total / rev) * 100 },
-        { l: '순이익률', v: (d.netProfit / rev) * 100 }
-      ];
+      const ratios = [{l:'원가율', v:(d.cogs.total/rev)*100}, {l:'인건비율', v:(d.laborCost.total/rev)*100}, {l:'순이익률', v:(d.netProfit/rev)*100}];
       ratios.forEach(r => {
-        grid.innerHTML += `<div class="ratio-card">
-          <div class="ratio-label">${r.l}</div>
-          <div class="ratio-value">${r.v.toFixed(1)}%</div>
-          <div class="ratio-bar"><div class="ratio-fill" style="width:${Math.min(r.v, 100)}%"></div></div>
-        </div>`;
+        ratioGrid.innerHTML += `<div class="ratio-card"><div class="ratio-label">${r.l}</div><div class="ratio-value">${r.v.toFixed(1)}%</div><div class="ratio-bar"><div class="ratio-fill" style="width:${Math.min(r.v, 100)}%"></div></div></div>`;
       });
     }
-    
+
     function formatCurrency(n) { return (n || 0).toLocaleString() + '원'; }
   </script>
 </body>
