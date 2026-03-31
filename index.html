@@ -3,397 +3,966 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>장수한우 Dashboard v17.2</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="원당점">
+  
+  <!-- 아이콘 설정 -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥩</text></svg>">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥩</text></svg>">
+  
+  <title>장수한우곱창 - 원당점</title>
+  
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    :root { 
-      --bg: #0a0a0a; 
-      --card: #1a1a1a; 
-      --input: #2a2a2a;
-      --text: #ffffff; 
-      --text-dim: #a0a0a0;
-      --red: #dc2626; 
-      --blue: #3b82f6; 
-      --yellow: #fbbf24;
-      --border: #333;
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
     }
-    body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); padding-bottom: 80px; }
     
-    /* 로딩 */
-    .loading { position: fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.9); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:999; }
-    .spinner { width:40px; height:40px; border:4px solid #333; border-top-color:var(--red); border-radius:50%; animation:spin 1s linear infinite; }
-    @keyframes spin { to { transform:rotate(360deg); } }
-
-    /* 헤더 */
-    .header { padding: 25px 20px 15px; text-align: center; }
-    .header h1 { font-size: 18px; font-weight: 900; color: #f97316; display: flex; align-items: center; justify-content: center; gap: 8px; }
-
-    /* 상단 선택 카드 */
-    .selection-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 0 15px 15px; }
-    .select-card { background: var(--card); border-radius: 15px; padding: 15px; border: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; cursor: pointer; transition: 0.2s; }
-    .select-card.active { border-color: var(--red); background: linear-gradient(145deg, #2a1010, #1a1a1a); }
-    .select-card span { font-size: 10px; color: var(--text-dim); font-weight: bold; text-transform: uppercase; }
-    .select-card p { font-size: 15px; font-weight: 800; color: var(--text-dim); }
-    .select-card.active p { color: white; }
-
-    .date-grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 10px; padding: 0 15px 15px; }
-    .date-box { background: var(--card); border-radius: 12px; border: 1px solid var(--border); padding: 12px; color: white; text-align: center; font-weight: bold; font-size: 15px; appearance: none; width: 100%; outline: none; }
-
-    /* 메인 요약 카드 */
-    .summary-card { margin: 0 15px 20px; padding: 25px; background: var(--red); border-radius: 25px; box-shadow: 0 10px 30px rgba(220, 38, 38, 0.3); position: relative; overflow: hidden; }
-    .summary-card::after { content: "🥩"; position: absolute; right: -10px; bottom: -10px; font-size: 100px; opacity: 0.1; }
-    .summary-card .label { font-size: 13px; font-weight: bold; opacity: 0.8; margin-bottom: 8px; }
-    .summary-card .value { font-size: 34px; font-weight: 900; letter-spacing: -1px; margin-bottom: 4px; }
-    .summary-card .date { font-size: 12px; opacity: 0.7; }
-
-    /* 하단 탭 메뉴 */
-    .tab-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #111; border-top: 1px solid #222; display: flex; height: 75px; z-index: 100; padding-bottom: env(safe-area-inset-bottom); }
-    .tab-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: #555; cursor: pointer; transition: 0.3s; }
-    .tab-item.active { color: var(--red); }
-    .tab-item i { font-size: 18px; margin-bottom: 2px; }
-    .tab-item span { font-size: 10px; font-weight: bold; }
-
-    /* 컨텐츠 영역 */
-    .content-section { display: none; padding: 0 15px; animation: fadeIn 0.3s ease-out; }
-    .content-section.active { display: block; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
-    /* 아코디언 리스트 스타일 */
-    .accordion-item { background: var(--card); border-radius: 18px; margin-bottom: 12px; border: 1px solid var(--border); overflow: hidden; }
-    .accordion-header { padding: 20px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
-    .accordion-header:active { background: #222; }
-    .acc-label { font-size: 14px; font-weight: 700; color: var(--text-dim); }
-    .acc-value { font-size: 16px; font-weight: 900; }
+    :root {
+      --bg-primary: #0a0a0a;
+      --bg-secondary: #1a1a1a;
+      --bg-tertiary: #2a2a2a;
+      --text-primary: #ffffff;
+      --text-secondary: #a0a0a0;
+      --accent-red: #dc2626;
+      --accent-blue: #3b82f6;
+      --accent-yellow: #fbbf24;
+      --accent-green: #22c55e;
+      --border-color: #3a3a3a;
+    }
     
-    .accordion-content { display: none; padding: 0 20px 20px; background: #1e1e1e; }
-    .accordion-content.active { display: block; }
-    .detail-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #333; font-size: 13px; color: var(--text-dim); }
-    .detail-row:last-child { border-bottom: none; }
-    .detail-row span:last-child { color: white; font-weight: 600; }
-
-    /* 비율 분석 */
-    .ratio-card { background: var(--card); border-radius: 20px; padding: 20px; border: 1px solid var(--border); margin-bottom: 15px; }
-    .ratio-title { font-size: 15px; font-weight: 900; margin-bottom: 20px; display: flex; justify-content: space-between; }
-    .ratio-row { margin-bottom: 18px; }
-    .ratio-info { display: flex; justify-content: space-between; font-size: 12px; font-weight: bold; margin-bottom: 6px; }
-    .ratio-bar-bg { background: #333; height: 8px; border-radius: 4px; overflow: hidden; }
-    .ratio-bar-fill { height: 100%; border-radius: 4px; transition: 1s ease-out; width: 0; }
-
-    /* 차트 전용 */
-    .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-    .chart-container { background: var(--card); border-radius: 20px; padding: 15px; border: 1px solid var(--border); margin-bottom: 15px; height: 350px; }
-
-    /* 목표 설정 (Picker 방식) */
-    .goal-card { background: var(--card); border-radius: 25px; padding: 25px; border: 1px solid var(--border); }
-    .goal-picker-wrap { display: flex; gap: 10px; margin-bottom: 20px; }
-    .goal-picker-wrap div { flex: 1; }
-    .goal-picker-wrap label { display: block; font-size: 11px; color: var(--text-dim); font-weight: bold; margin-bottom: 8px; text-align: center; }
-    .goal-select { width: 100%; background: var(--input); border: 1px solid var(--border); padding: 12px; border-radius: 12px; color: white; font-size: 16px; font-weight: 900; text-align: center; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Apple SD Gothic Neo', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      padding-bottom: 60px;
+    }
     
-    .goal-btn { width: 100%; padding: 18px; background: var(--red); color: white; border: none; border-radius: 15px; font-weight: 900; font-size: 15px; margin-top: 10px; box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4); }
-    .goal-stat { display: flex; justify-content: space-between; margin-top: 25px; align-items: flex-end; }
-    .goal-pct { font-size: 32px; font-weight: 900; color: var(--yellow); letter-spacing: -1px; }
-
-    .hidden { display: none !important; }
+    .loading-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: var(--bg-primary);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+    
+    .loading-spinner {
+      width: 50px;
+      height: 50px;
+      border: 4px solid var(--bg-tertiary);
+      border-top-color: var(--accent-red);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    .loading-text {
+      margin-top: 20px;
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+    
+    .login-container {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: var(--bg-primary);
+      align-items: center;
+      justify-content: center;
+      z-index: 9998;
+      padding: 20px;
+    }
+    
+    .login-box {
+      background: var(--bg-secondary);
+      padding: 40px;
+      border-radius: 16px;
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
+    }
+    
+    .login-title {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      background: linear-gradient(135deg, var(--accent-red), var(--accent-yellow));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .login-subtitle {
+      color: var(--text-secondary);
+      font-size: 14px;
+      margin-bottom: 30px;
+    }
+    
+    .login-input {
+      width: 100%;
+      padding: 16px;
+      background: var(--bg-tertiary);
+      border: 2px solid var(--border-color);
+      border-radius: 12px;
+      color: var(--text-primary);
+      font-size: 18px;
+      text-align: center;
+      letter-spacing: 4px;
+      margin-bottom: 20px;
+    }
+    
+    .login-input:focus {
+      outline: none;
+      border-color: var(--accent-red);
+    }
+    
+    .login-btn {
+      width: 100%;
+      padding: 16px;
+      background: var(--accent-red);
+      border: none;
+      border-radius: 12px;
+      color: white;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    
+    .login-btn:active {
+      background: #b91c1c;
+    }
+    
+    .error-message {
+      color: var(--accent-red);
+      font-size: 14px;
+      margin-top: 10px;
+      display: none;
+    }
+    
+    .header {
+      background: var(--bg-secondary);
+      padding: 20px;
+      text-align: center;
+      border-bottom: 1px solid var(--border-color);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    
+    .app-title {
+      font-size: 20px;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent-red), var(--accent-yellow));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .date-selector {
+      display: flex;
+      gap: 12px;
+      padding: 16px;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-color);
+    }
+    
+    .date-picker {
+      flex: 1;
+      padding: 12px 16px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      color: var(--text-primary);
+      font-size: 15px;
+      text-align: center;
+      cursor: pointer;
+    }
+    
+    .date-picker:focus {
+      outline: none;
+      border-color: var(--accent-red);
+    }
+    
+    .summary-card {
+      margin: 16px;
+      padding: 24px;
+      background: linear-gradient(135deg, var(--accent-red), #b91c1c);
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(220, 38, 38, 0.3);
+    }
+    
+    .summary-label {
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+    
+    .summary-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: white;
+      margin-bottom: 8px;
+    }
+    
+    .summary-date {
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 13px;
+    }
+    
+    .tabs {
+      display: flex;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-color);
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    
+    .tab {
+      flex: 1;
+      min-width: 100px;
+      padding: 16px 12px;
+      background: none;
+      border: none;
+      border-bottom: 3px solid transparent;
+      color: var(--text-secondary);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      white-space: nowrap;
+    }
+    
+    .tab.active {
+      color: var(--accent-red);
+      border-bottom-color: var(--accent-red);
+    }
+    
+    .tab-content {
+      display: none;
+      padding: 16px;
+    }
+    
+    .tab-content.active {
+      display: block;
+    }
+    
+    .accordion-item {
+      background: var(--bg-secondary);
+      border-radius: 12px;
+      margin-bottom: 12px;
+      overflow: hidden;
+    }
+    
+    .accordion-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 18px;
+      cursor: pointer;
+      transition: background 0.3s;
+      min-height: 60px;
+    }
+    
+    .accordion-header:active {
+      background: var(--bg-tertiary);
+    }
+    
+    .accordion-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 1;
+    }
+    
+    .accordion-icon {
+      width: 8px;
+      height: 8px;
+      background: var(--accent-red);
+      border-radius: 50%;
+    }
+    
+    .accordion-label {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    
+    .accordion-value {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-right: 8px;
+    }
+    
+    .accordion-value.positive {
+      color: var(--accent-blue);
+    }
+    
+    .accordion-value.negative {
+      color: var(--accent-red);
+    }
+    
+    .accordion-chevron {
+      width: 20px;
+      height: 20px;
+      transition: transform 0.3s;
+      color: var(--text-secondary);
+      flex-shrink: 0;
+    }
+    
+    .accordion-header.active .accordion-chevron {
+      transform: rotate(180deg);
+    }
+    
+    .accordion-content {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease-out;
+    }
+    
+    .accordion-content.active {
+      max-height: 2000px;
+    }
+    
+    .accordion-details {
+      padding: 0 18px 18px 18px;
+    }
+    
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border-color);
+      font-size: 14px;
+    }
+    
+    .detail-row:last-child {
+      border-bottom: none;
+    }
+    
+    .detail-label {
+      color: var(--text-secondary);
+    }
+    
+    .detail-value {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+    
+    .sub-accordion {
+      margin: 8px 0;
+    }
+    
+    .sub-accordion-header {
+      padding: 8px 0;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-color);
+    }
+    
+    .sub-accordion-label {
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+    
+    .sub-accordion-value {
+      color: var(--text-primary);
+      font-weight: 600;
+      font-size: 14px;
+    }
+    
+    .sub-accordion-content {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease-out;
+      padding-left: 16px;
+    }
+    
+    .sub-accordion-content.active {
+      max-height: 500px;
+    }
+    
+    .ratio-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+    
+    .ratio-card {
+      background: var(--bg-secondary);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+    }
+    
+    .ratio-label {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+    
+    .ratio-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    
+    .ratio-bar {
+      height: 6px;
+      background: var(--bg-tertiary);
+      border-radius: 3px;
+      margin-top: 8px;
+      overflow: hidden;
+    }
+    
+    .ratio-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent-red), var(--accent-yellow));
+      border-radius: 3px;
+      transition: width 0.5s ease-out;
+    }
+    
+    .hidden {
+      display: none !important;
+    }
+    
+    @media (min-width: 768px) {
+      body {
+        max-width: 768px;
+        margin: 0 auto;
+        box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
+      }
+    }
   </style>
 </head>
 <body>
-  <div class="loading" id="loader"><div class="spinner"></div><p style="margin-top:15px; font-size:13px; font-weight:bold;">데이터 동기화 중...</p></div>
-
-  <header class="header">
-    <h1><span>🥩</span> 장수한우곱창 통합 대시보드</h1>
-  </header>
-
-  <!-- 지점 선택 카드 -->
-  <div class="selection-grid">
-    <div class="select-card active" id="btnWondang" onclick="selBranch('원당점')">
-      <span>Main Store</span>
-      <p>📍 원당점</p>
-    </div>
-    <div class="select-card" id="btnBaekseok" onclick="selBranch('백석점')">
-      <span>Branch Store</span>
-      <p>📍 백석점</p>
+  <div class="loading-screen" id="loadingScreen">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">로딩 중...</div>
+  </div>
+  
+  <div class="login-container" id="loginContainer">
+    <div class="login-box">
+      <div class="login-title">장수한우곱창</div>
+      <div class="login-subtitle">원당점 손익계산서</div>
+      <input type="password" class="login-input" id="passwordInput" placeholder="비밀번호" maxlength="6" inputmode="numeric">
+      <button class="login-btn" id="loginBtn">로그인</button>
+      <div class="error-message" id="errorMessage">비밀번호가 올바르지 않습니다</div>
     </div>
   </div>
-
-  <!-- 연도/월 선택 -->
-  <div class="date-grid">
-    <select class="date-box" id="yearSel" onchange="loadData()">
-      <option value="2025">2025년</option>
-      <option value="2026" selected>2026년</option>
-    </select>
-    <select class="date-box" id="monthSel" onchange="loadData()">
-      <option value="1">1월</option><option value="2">2월</option><option value="3" selected>3월</option>
-      <option value="4">4월</option><option value="5">5월</option><option value="6">6월</option>
-      <option value="7">7월</option><option value="8">8월</option><option value="9">9월</option>
-      <option value="10">10월</option><option value="11">11월</option><option value="12">12월</option>
-    </select>
-  </div>
-
-  <!-- 요약 카드 -->
-  <div class="summary-card">
-    <div class="label">이번 달 정산 순이익</div>
-    <div class="value" id="totalProfit">-</div>
-    <div class="date" id="baseDate">정산 데이터 집계 중...</div>
-  </div>
-
-  <!-- [탭 1] 손익계산서 -->
-  <div id="sec-pnl" class="content-section active">
-    <div id="pnlAccordionContainer"></div>
-  </div>
-
-  <!-- [탭 2] 비율 분석 -->
-  <div id="sec-ratio" class="content-section">
-    <div class="ratio-card" id="ratioContent"></div>
-    <div id="bepAnalysis" class="ratio-card" style="background: linear-gradient(145deg, #111, #1a1a1a);"></div>
-  </div>
-
-  <!-- [탭 3] 월별 추이 -->
-  <div id="sec-trend" class="content-section">
-    <div class="chart-header">
-      <h3 style="font-size:15px; font-weight:900;">📈 연간 매출액 추이</h3>
-      <select class="date-box" id="trendYearSel" style="width:100px; padding:8px;" onchange="renderTrendChart()">
-        <option value="2025">2025년</option>
-        <option value="2026" selected>2026년</option>
-      </select>
+  
+  <div id="mainApp" class="hidden">
+    <div class="header">
+      <div class="app-title">🥩 장수한우곱창 원당점</div>
     </div>
-    <div class="chart-container">
-      <canvas id="trendChart"></canvas>
+    
+    <div class="date-selector">
+      <select class="date-picker" id="yearPicker"></select>
+      <select class="date-picker" id="monthPicker"></select>
+    </div>
+    
+    <div class="summary-card">
+      <div class="summary-label">매출 순 이익</div>
+      <div class="summary-value" id="summaryValue">-</div>
+      <div class="summary-date" id="summaryDate">-</div>
+    </div>
+    
+    <div class="tabs">
+      <button class="tab active" data-tab="pl">손익계산서</button>
+      <button class="tab" data-tab="analysis">비율 분석</button>
+    </div>
+    
+    <div class="tab-content active" data-tab-content="pl" id="plContent"></div>
+    
+    <div class="tab-content" data-tab-content="analysis">
+      <div class="ratio-grid" id="ratioGrid"></div>
     </div>
   </div>
-
-  <!-- [탭 4] 목표 설정 -->
-  <div id="sec-goal" class="content-section">
-    <div class="goal-card">
-      <div class="goal-picker-wrap">
-        <div>
-          <label>억 단위</label>
-          <select id="goalBillions" class="goal-select">
-            <option value="0">0억</option><option value="1">1억</option><option value="2">2억</option>
-          </select>
-        </div>
-        <div>
-          <label>천만 단위</label>
-          <select id="goalMillions" class="goal-select">
-            <option value="0">0천만</option><option value="1000">1천만</option><option value="2000">2천만</option>
-            <option value="3000">3천만</option><option value="4000">4천만</option><option value="5000">5천만</option>
-            <option value="6000">6천만</option><option value="7000">7천만</option><option value="8000">8천만</option>
-            <option value="9000">9천만</option>
-          </select>
-        </div>
-      </div>
-      <button class="goal-btn" onclick="saveGoals()">이번 달 목표 저장</button>
-
-      <div class="goal-stat">
-        <div><p style="font-size:11px; color:var(--text-dim); font-weight:bold; margin-bottom:5px;">실시간 매출 달성률</p><p class="goal-pct" id="revPct">0%</p></div>
-        <div style="text-align:right;"><p style="font-size:11px; color:var(--text-dim); font-weight:bold; margin-bottom:5px;">현재 매출액</p><p style="font-weight:900; font-size:16px;" id="currRev">-</p></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- 하단 네비게이션 -->
-  <nav class="tab-bar">
-    <div class="tab-item active" onclick="switchTab('pnl', this)"><i>📋</i><span>손익계산서</span></div>
-    <div class="tab-item" onclick="switchTab('ratio', this)"><i>📊</i><span>비율 분석</span></div>
-    <div class="tab-item" onclick="switchTab('trend', this)"><i>📈</i><span>월별 추이</span></div>
-    <div class="tab-item" onclick="switchTab('goal', this)"><i>🎯</i><span>목표 설정</span></div>
-  </nav>
-
+  
   <script>
-    const CONFIG = {
-      url: 'https://script.google.com/macros/s/AKfycbzuiDeyu-WmpGbCg_lZc3Gq0X0hmSk18Lasxicr_Gag1cu2b11JiIbftwfurLoWLbUR/exec',
-      token: '940216', branch: '원당점'
+    const APP_CONFIG = {
+      BRANCH: '원당점',
+      API_ENDPOINT: 'https://script.google.com/macros/s/AKfycbzei18XstvzcjBmokNs1D_Xnq3bRPldlEsxzi_8JRwOwKAryo2KEm1aDnmnK52tZTCI/exec'
     };
-
-    let cachedData = null;
-    let trendChartObj = null;
-
-    function selBranch(b) {
-      CONFIG.branch = b;
-      document.getElementById('btnWondang').classList.toggle('active', b === '원당점');
-      document.getElementById('btnBaekseok').classList.toggle('active', b === '백석점');
-      loadData();
-    }
-
-    function switchTab(id, el) {
-      document.querySelectorAll('.tab-item').forEach(x => x.classList.remove('active'));
-      document.querySelectorAll('.content-section').forEach(x => x.classList.remove('active'));
-      el.classList.add('active');
-      document.getElementById('sec-' + id).classList.add('active');
-      if(id === 'trend') renderTrendChart();
-      if(id === 'ratio') renderRatioAnalysis();
-      if(id === 'goal') updateGoalUI();
-    }
-
-    async function loadData() {
-      const loader = document.getElementById('loader');
-      const year = document.getElementById('yearSel').value;
-      const month = document.getElementById('monthSel').value;
-      loader.classList.remove('hidden');
-      try {
-        const res = await fetch(`${CONFIG.url}?token=${CONFIG.token}&branch=${CONFIG.branch}&year=${year}&month=${month}&action=getProfitLoss`);
-        const data = await res.json();
-        if (data.success) {
-          cachedData = data;
-          renderPnL(data);
-          // 데이터 로드 시 목표 UI도 같이 갱신 (지점별 로딩 위함)
-          updateGoalUI();
-        } else { alert("데이터 오류: " + data.message); }
-      } catch (e) { alert("서버 연결 실패!"); }
-      finally { loader.classList.add('hidden'); }
-    }
-
-    function renderPnL(data) {
-      const getV = (k) => data.pnlData.find(i => i.label.replace(/\s/g,"").includes(k.replace(/\s/g,"")))?.value || 0;
-      const profit = getV("순이익") || getV("매출순이익");
-      document.getElementById('totalProfit').innerText = profit.toLocaleString() + "원";
-      document.getElementById('baseDate').innerText = data.latestDay !== "-" ? `'${data.latestDay}일' 영업 종료 기준 리포트` : "데이터 집계 중";
+    
+    const APP_STATE = {
+      password: null,
+      currentYear: new Date().getFullYear(),
+      currentMonth: new Date().getMonth() + 1,
+      data: null,
+      cache: {}
+    };
+    
+    document.addEventListener('DOMContentLoaded', init);
+    
+    function init() {
+      const savedPassword = localStorage.getItem('jangsuhan_wondang_password');
+      if (savedPassword) {
+        APP_STATE.password = savedPassword;
+        showMainApp();
+      } else {
+        showLogin();
+      }
       
-      const container = document.getElementById('pnlAccordionContainer');
-      container.innerHTML = "";
+      document.getElementById('loginBtn').addEventListener('click', handleLogin);
+      document.getElementById('passwordInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') handleLogin();
+      });
       
-      const groups = [
-        { title: "1. 매출액 (+)", color: "var(--blue)", keywords: ["현금매출", "카드매출"], val: getV("매출액") },
-        { title: "2. 매출원가 (-)", color: "var(--red)", val: getV("매출원가"), subGroups: [
-          { title: "└ 육류원가", keywords: ["고기값", "특양"], val: 0 },
-          { title: "└ 식자재&공산품원가", keywords: ["미락", "콩나물", "마트"], val: 0 },
-          { title: "└ 주류원가", keywords: ["주류원가"], val: getV("주류원가") },
-          { title: "└ 음료원가", keywords: ["음료원가"], val: getV("음료원가") }
-        ]},
-        { title: "3. 매출이익", color: "var(--blue)", val: getV("매출이익") },
-        { title: "4. 인건비 (-)", color: "var(--red)", val: getV("인건비"), keywords: ["직원급여", "알바급여"] },
-        { title: "5. 임대료 (-)", color: "var(--red)", val: getV("임대료") },
-        { title: "6. 고정비 (-)", color: "var(--red)", val: getV("고정비"), keywords: ["보험", "정수기", "세무", "위생"] },
-        { title: "7. 변동비 (-)", color: "var(--red)", val: getV("변동비"), keywords: ["수수료", "관리비", "가스", "수도", "통신", "광고"] },
-        { title: "8. 영업이익", color: "var(--blue)", val: getV("영업이익") },
-        { title: "9. 세금예수금 (-)", color: "var(--red)", val: getV("세금예수금"), keywords: ["부가세예수금", "종합소득세예수금"] }
-      ];
-
-      groups.forEach(group => {
-        const itemEl = document.createElement('div');
-        itemEl.className = 'accordion-item';
-        let detailsHtml = "";
-        if (group.subGroups) {
-          group.subGroups.forEach(sg => {
-            let sgSum = 0;
-            let rowsHtml = "";
-            data.pnlData.forEach(p => {
-              if (sg.keywords && sg.keywords.some(k => p.label.includes(k))) {
-                sgSum += p.value;
-                rowsHtml += `<div class="detail-row" style="padding-left:25px;"><span>${p.label}</span><span>${p.value.toLocaleString()}원</span></div>`;
-              }
-            });
-            detailsHtml += `<div class="detail-row" style="font-weight:bold; color:white;"><span>${sg.title}</span><span>${(sg.val || sgSum).toLocaleString()}원</span></div>` + rowsHtml;
-          });
-        } else if (group.keywords) {
-          group.keywords.forEach(k => {
-            data.pnlData.forEach(p => {
-              if (p.label.replace(/\s/g,"").includes(k)) {
-                detailsHtml += `<div class="detail-row"><span>${p.label}</span><span>${p.value.toLocaleString()}원</span></div>`;
-              }
-            });
-          } );
-        }
-        itemEl.innerHTML = `<div class="accordion-header" onclick="this.nextElementSibling.classList.toggle('active')"><span class="acc-label">${group.title}</span><span class="acc-value" style="color:${group.color}">${group.val.toLocaleString()}원</span></div><div class="accordion-content">${detailsHtml || '<p style="font-size:11px; color:#555;">세부 내역 없음</p>'}</div>`;
-        container.appendChild(itemEl);
+      document.querySelectorAll('.tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          const tabName = tab.dataset.tab;
+          document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+          document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+          tab.classList.add('active');
+          document.querySelector(`[data-tab-content="${tabName}"]`).classList.add('active');
+        });
+      });
+      
+      initDatePickers();
+      document.getElementById('yearPicker').addEventListener('change', (e) => {
+        APP_STATE.currentYear = parseInt(e.target.value);
+        loadData();
+      });
+      document.getElementById('monthPicker').addEventListener('change', (e) => {
+        APP_STATE.currentMonth = parseInt(e.target.value);
+        loadData();
       });
     }
-
-    /**
-     * 📊 비율 분석: 사장님 요청 6대 항목 픽스
-     */
-    function renderRatioAnalysis() {
-      if(!cachedData) return;
-      const data = cachedData.pnlData;
-      const getSumByKeywords = (kws) => data.filter(i => kws.some(kw => i.label.includes(kw))).reduce((a, b) => a + b.value, 0);
-      const getVal = (k) => data.find(i => i.label.replace(/\s/g,"").includes(k.replace(/\s/g,"")))?.value || 0;
-      
-      const rev = getVal("매출액") || 1;
-      const margin = ((getVal("순이익") / rev) * 100).toFixed(1);
-
-      // 사장님 요청 항목 픽스
-      const fixedItems = [
-        { l: "육류원가", v: getSumByKeywords(["고기값", "특양"]), c: "#ef4444" },
-        { l: "식자재&공산품원가", v: getSumByKeywords(["미락", "콩나물", "마트"]), c: "#f97316" },
-        { l: "주류원가", v: getVal("주류원가"), c: "#fbbf24" },
-        { l: "인건비", v: getVal("인건비"), c: "#10b981" },
-        { l: "임대료", v: getVal("임대료"), c: "#3b82f6" },
-        { l: "네이버광고비용", v: getSumByKeywords(["광고"]), c: "#8b5cf6" }
-      ];
-
-      document.getElementById('ratioContent').innerHTML = `
-        <div class="ratio-title"><span>📊 매출 대비 지출 비중</span><span style="color:var(--yellow)">순이익률 ${margin}%</span></div>
-        ${fixedItems.map(item => {
-          const pct = ((item.v / rev) * 100).toFixed(1);
-          return `<div class="ratio-row"><div class="ratio-info"><span>${item.l}</span><span>${pct}%</span></div>
-                  <div class="ratio-bar-bg"><div class="ratio-bar-fill" style="width:${pct}%; background:${item.c}"></div></div></div>`;
-        }).join('')}
-      `;
-
-      // BEP (간이 계산)
-      const fixedTotal = getVal("인건비") + getVal("임대료") + getVal("고정비");
-      const varRatio = (getVal("매출원가") + getVal("변동비")) / rev;
-      const bep = Math.round(fixedTotal / (1 - varRatio));
-      document.getElementById('bepAnalysis').innerHTML = `
-        <div class="ratio-info"><span style="color:var(--text-dim)">🛡️ 예상 손익분기점(BEP) 매출액</span></div>
-        <div style="font-size:22px; font-weight:900; margin:10px 0;">약 ${Math.round(bep/10000).toLocaleString()}만원</div>
-        <p style="font-size:11px; color:#666;">*고정비 및 변동비율 기반 자동 계산값입니다.</p>
-      `;
+    
+    function showLogin() {
+      document.getElementById('loadingScreen').style.display = 'none';
+      document.getElementById('loginContainer').style.display = 'flex';
+      document.getElementById('mainApp').classList.add('hidden');
     }
-
-    async function renderTrendChart() {
-      const ctx = document.getElementById('trendChart').getContext('2d');
-      if(trendChartObj) trendChartObj.destroy();
-      const year = document.getElementById('trendYearSel').value;
+    
+    function showMainApp() {
+      document.getElementById('loadingScreen').style.display = 'none';
+      document.getElementById('loginContainer').style.display = 'none';
+      document.getElementById('mainApp').classList.remove('hidden');
+      loadData();
+    }
+    
+    async function handleLogin() {
+      const password = document.getElementById('passwordInput').value;
+      const errorMsg = document.getElementById('errorMessage');
+      
+      if (!password) {
+        errorMsg.style.display = 'block';
+        return;
+      }
+      
+      if (password === '940216') {
+        APP_STATE.password = password;
+        localStorage.setItem('jangsuhan_wondang_password', password);
+        errorMsg.style.display = 'none';
+        showMainApp();
+      } else {
+        errorMsg.style.display = 'block';
+        document.getElementById('passwordInput').value = '';
+      }
+    }
+    
+    function initDatePickers() {
+      const yearPicker = document.getElementById('yearPicker');
+      const monthPicker = document.getElementById('monthPicker');
+      
+      for (let year = 2025; year <= 2030; year++) {
+        const option = document.createElement('option');
+        option.value = year;
+        option.textContent = `${year}년`;
+        if (year === APP_STATE.currentYear) option.selected = true;
+        yearPicker.appendChild(option);
+      }
+      
+      for (let month = 1; month <= 12; month++) {
+        const option = document.createElement('option');
+        option.value = month;
+        option.textContent = `${month}월`;
+        if (month === APP_STATE.currentMonth) option.selected = true;
+        monthPicker.appendChild(option);
+      }
+    }
+    
+    async function loadData() {
+      const cacheKey = `${APP_STATE.currentYear}-${APP_STATE.currentMonth}`;
+      
+      if (APP_STATE.cache[cacheKey]) {
+        APP_STATE.data = APP_STATE.cache[cacheKey];
+        renderUI();
+        return;
+      }
+      
+      document.getElementById('loadingScreen').style.display = 'flex';
+      
       try {
-        const res = await fetch(`${CONFIG.url}?token=${CONFIG.token}&branch=${CONFIG.branch}&action=getTrendData&year=${year}`);
-        const result = await res.json();
-        if(result.success) {
-          const data = new Array(12).fill(0);
-          result.trend.forEach(t => { data[parseInt(t.month.replace("월","")) - 1] = t.revenue; });
-          trendChartObj = new Chart(ctx, {
-            type: 'line',
-            data: { labels: ["1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월"], datasets: [{ label: '매출액', data: data, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', fill: true, tension: 0.4 }] },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { grid: { color: '#222' }, ticks: { color: '#666', font: { size: 10 }, callback: v => v/10000 + '만' } }, x: { grid: { display: false }, ticks: { color: '#888' } } } }
-          });
+        const response = await fetch(APP_CONFIG.API_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            password: APP_STATE.password,
+            branch: APP_CONFIG.BRANCH,
+            year: APP_STATE.currentYear,
+            month: APP_STATE.currentMonth
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success && result.pnlData) {
+          APP_STATE.data = parsePnlData(result.pnlData, result.latestDay);
+          APP_STATE.cache[cacheKey] = APP_STATE.data;
+          renderUI();
+        } else {
+          alert('데이터를 불러오는데 실패했습니다: ' + (result.error || '알 수 없는 오류'));
         }
-      } catch(e) { console.log("Trend load error"); }
+      } catch (error) {
+        console.error('Data loading failed:', error);
+        alert('네트워크 오류: ' + error.message);
+      } finally {
+        document.getElementById('loadingScreen').style.display = 'none';
+      }
     }
-
-    /**
-     * 🎯 지점별 개별 목표 저장
-     */
-    function saveGoals() {
-      const b = document.getElementById('goalBillions').value;
-      const m = document.getElementById('goalMillions').value;
-      const total = (parseInt(b) * 100000000) + (parseInt(m) * 10000);
+    
+    function parsePnlData(pnlData, latestDay) {
+      const dataMap = {};
+      pnlData.forEach(item => {
+        dataMap[item.label] = item.value;
+      });
       
-      // 지점 이름을 키값에 포함시켜 개별 저장
-      localStorage.setItem(`jangsu_goal_val_${CONFIG.branch}`, total);
-      localStorage.setItem(`jangsu_goal_bill_${CONFIG.branch}`, b);
-      localStorage.setItem(`jangsu_goal_mill_${CONFIG.branch}`, m);
+      return {
+        revenue: {
+          total: dataMap['매출액'] || 0,
+          cash: dataMap['현금매출'] || 0,
+          card: dataMap['카드매출'] || 0
+        },
+        cogs: {
+          total: dataMap['매출원가'] || 0,
+          categories: {
+            '육류원가': dataMap['육류원가'] || 0,
+            '식자재&공산품': dataMap['식자재&공산품'] || 0,
+            '주류원가': dataMap['주류원가'] || 0,
+            '음료원가': dataMap['음료원가'] || 0
+          },
+          items: {
+            '고기값': dataMap['고기값'] || 0,
+            '특양': dataMap['특양'] || 0,
+            '미락': dataMap['미락'] || 0,
+            '콩나물': dataMap['콩나물'] || 0,
+            '네이버주문': dataMap['네이버주문'] || 0,
+            '마트': dataMap['마트'] || 0,
+            '쿠팡': dataMap['쿠팡'] || 0
+          }
+        },
+        grossProfit: dataMap['매출이익'] || 0,
+        laborCost: {
+          total: dataMap['인건비'] || 0,
+          items: {
+            '직원급여': dataMap['직원급여'] || 0,
+            '알바급여': dataMap['알바급여'] || 0
+          }
+        },
+        rent: dataMap['임대료'] || 0,
+        fixedCost: {
+          total: dataMap['고정비'] || 0,
+          items: {
+            '화재보험': dataMap['화재보험'] || 0,
+            '정수기렌탈': dataMap['정수기렌탈'] || 0,
+            '세무사비용': dataMap['세무사비용'] || 0
+          }
+        },
+        variableCost: {
+          total: dataMap['변동비'] || 0,
+          items: {
+            '카드수수료': dataMap['카드수수료'] || 0,
+            '매장관리비': dataMap['매장관리비(전기,수도)'] || 0,
+            '가스사용료': dataMap['가스사용료'] || 0,
+            '광고비용': dataMap['광고비용'] || 0,
+            '기타비용': dataMap['기타비용'] || 0
+          }
+        },
+        operatingProfit: dataMap['영업이익'] || 0,
+        tax: {
+          total: dataMap['세금예수금'] || 0,
+          items: {
+            '부가세예수금': dataMap['부가세 예수금'] || 0,
+            '종합소득세예수금': dataMap['종합소득세 예수금'] || 0
+          }
+        },
+        netProfit: dataMap['매출 순 이익'] || 0,
+        lastUpdatedDay: latestDay,
+        ratios: {}
+      };
+    }
+    
+    function renderUI() {
+      const data = APP_STATE.data;
+      if (!data) return;
       
-      alert(`${CONFIG.branch} 목표가 저장되었습니다!`);
-      updateGoalUI();
+      calculateRatios(data);
+      
+      document.getElementById('summaryValue').textContent = formatCurrency(data.netProfit);
+      document.getElementById('summaryDate').textContent = data.lastUpdatedDay && data.lastUpdatedDay !== '-'
+        ? `'${data.lastUpdatedDay}일'까지의 손익계산서`
+        : '데이터 업데이트 필요';
+      
+      renderProfitLoss(data);
+      renderRatios(data);
     }
-
-    /**
-     * 🎯 지점별 개별 목표 UI 갱신
-     */
-    function updateGoalUI() {
-      const gVal = parseInt(localStorage.getItem(`jangsu_goal_val_${CONFIG.branch}`) || 0);
-      document.getElementById('goalBillions').value = localStorage.getItem(`jangsu_goal_bill_${CONFIG.branch}`) || 0;
-      document.getElementById('goalMillions').value = localStorage.getItem(`jangsu_goal_mill_${CONFIG.branch}`) || 0;
-
-      if(!cachedData) return;
-      const currRev = cachedData.pnlData.find(i => i.label.includes("매출액"))?.value || 0;
-      document.getElementById('currRev').innerText = currRev.toLocaleString() + "원";
-      const pct = gVal > 0 ? Math.min(150, (currRev / gVal) * 100).toFixed(1) : 0;
-      document.getElementById('revPct').innerText = pct + "%";
+    
+    function calculateRatios(data) {
+      if (data.revenue.total > 0) {
+        data.ratios = {
+          cogsRatio: (data.cogs.total / data.revenue.total) * 100,
+          laborRatio: (data.laborCost.total / data.revenue.total) * 100,
+          rentRatio: (data.rent / data.revenue.total) * 100,
+          fixedRatio: (data.fixedCost.total / data.revenue.total) * 100,
+          variableRatio: (data.variableCost.total / data.revenue.total) * 100,
+          netProfitRatio: (data.netProfit / data.revenue.total) * 100
+        };
+      }
     }
-
-    window.onload = loadData;
+    
+    function renderProfitLoss(data) {
+      const container = document.getElementById('plContent');
+      container.innerHTML = '';
+      
+      const items = [
+        {
+          title: '매출액',
+          value: data.revenue.total,
+          isPositive: true,
+          details: {
+            '현금매출': data.revenue.cash,
+            '카드매출': data.revenue.card
+          }
+        },
+        {
+          title: '매출원가',
+          value: data.cogs.total,
+          isNegative: true,
+          subCategories: [
+            {
+              title: '육류원가',
+              value: data.cogs.categories['육류원가'] || 0,
+              items: {
+                '고기값': data.cogs.items['고기값'] || 0,
+                '특양': data.cogs.items['특양'] || 0
+              }
+            },
+            {
+              title: '식자재&공산품',
+              value: data.cogs.categories['식자재&공산품'] || 0,
+              items: {
+                '미락': data.cogs.items['미락'] || 0,
+                '콩나물': data.cogs.items['콩나물'] || 0,
+                '네이버주문': data.cogs.items['네이버주문'] || 0,
+                '마트': data.cogs.items['마트'] || 0,
+                '쿠팡': data.cogs.items['쿠팡'] || 0
+              }
+            },
+            {
+              title: '주류원가',
+              value: data.cogs.categories['주류원가'] || 0
+            },
+            {
+              title: '음료원가',
+              value: data.cogs.categories['음료원가'] || 0
+            }
+          ]
+        },
+        {
+          title: '매출이익',
+          value: data.grossProfit,
+          isPositive: true
+        },
+        {
+          title: '인건비',
+          value: data.laborCost.total,
+          isNegative: true,
+          details: data.laborCost.items
+        },
+        {
+          title: '임대료',
+          value: data.rent,
+          isNegative: true
+        },
+        {
+          title: '고정비',
+          value: data.fixedCost.total,
+          isNegative: true,
+          details: data.fixedCost.items
+        },
+        {
+          title: '변동비',
+          value: data.variableCost.total,
+          isNegative: true,
+          details: data.variableCost.items
+        },
+        {
+          title: '영업이익',
+          value: data.operatingProfit,
+          isPositive: true
+        },
+        {
+          title: '세금예수금',
+          value: data.tax.total,
+          isNegative: true,
+          details: data.tax.items
+        },
+        {
+          title: '매출 순 이익',
+          value: data.netProfit,
+          isPositive: true
+        }
+      ];
+      
+      items.forEach(item => {
+        const accordion = createAccordion(item);
+        container.appendChild(accordion);
+      });
+    }
+    
+    function createAccordion(item) {
+      const div = document.createElement('div');
+      div.className = 'accordion-item';
+      
+      const hasDetails = (item.details && Object.keys(item.details).length > 0) || 
+                         (item.subCategories && item.subCategories.length > 0);
+      
+      let valueClass = '';
+      if (item.isPositive) valueClass = 'positive';
+      if (item.isNegative) valueClass = 'negative';
+      
+      let detailsHTML = '';
+      
+      if (item.subCategories) {
+        detailsHTML = `
+          <div class="accordion-content">
+            <div class="accordion-details">
+              ${item.subCategories.map(sub => `
+                <div class="sub-accordion">
+                  <div class="sub-accordion-header" onclick="toggleSubAccordion(this)">
+                    <span class="sub-accordion-label">${sub.title}</span>
+                    <span class="sub-accordion-value">${formatCurrency(sub.value)}</span>
+                  </div>
+                  ${sub.items ? `
+                    <div class="sub-accordion-content">
+                      ${Object.entries(sub.items).map(([key, value]) => `
+                        <div class="detail-row">
+                          <div class="detail-label">${key}</div>
+                          <div class="detail-value">${formatCurrency(value)}</div>
+                        </div>
+                      `).join('')}
+                    </div>
+                  ` : ''}
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      } else if (item.details) {
+        detailsHTML = `
+          <div class="accordion-content">
+            <div class="accordion-details">
+              ${Object.entries(item.details).map(([key, value]) => `
+                <div class="detail-row">
+                  <div class="detail-label">${key}</div>
+                  <div class="detail-value">${formatCurrency(value)}</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+      
+      div.innerHTML = `
+        <div class="accordion-header ${hasDetails ? '' : 'no-expand'}" ${hasDetails ? 'onclick="toggleAccordion(this)"' : ''}>
+          <div class="accordion-title">
+            <div class="accordion-icon"></div>
+            <div class="accordion-label">${item.title}</div>
+          </div>
+          <div style="display: flex; align-items: center;">
+            <div class="accordion-value ${valueClass}">${formatCurrency(item.value)}</div>
+            ${hasDetails ? '<div class="accordion-chevron">▼</div>' : ''}
+          </div>
+        </div>
+        ${detailsHTML}
+      `;
+      
+      return div;
+    }
+    
+    function toggleAccordion(header) {
+      const content = header.nextElementSibling;
+      const isActive = header.classList.contains('active');
+      
+      document.querySelectorAll('.accordion-header.active').forEach(h => {
+        h.classList.remove('active');
+        if (h.nextElementSibling) h.nextElementSibling.classList.remove('active');
+      });
+      
+      if (!isActive && content) {
+        header.classList.add('active');
+        content.classList.add('active');
+      }
+    }
+    
+    function toggleSubAccordion(header) {
+      const content = header.nextElementSibling;
+      if (!content) return;
+      content.classList.toggle('active');
+    }
+    
+    function renderRatios(data) {
+      const container = document.getElementById('ratioGrid');
+      container.innerHTML = '';
+      
+      const ratios = [
+        { label: '원가율', value: data.ratios.cogsRatio || 0 },
+        { label: '인건비율', value: data.ratios.laborRatio || 0 },
+        { label: '임대료율', value: data.ratios.rentRatio || 0 },
+        { label: '고정비율', value: data.ratios.fixedRatio || 0 },
+        { label: '변동비율', value: data.ratios.variableRatio || 0 },
+        { label: '순이익률', value: data.ratios.netProfitRatio || 0 }
+      ];
+      
+      ratios.forEach(ratio => {
+        const card = document.createElement('div');
+        card.className = 'ratio-card';
+        card.innerHTML = `
+          <div class="ratio-label">${ratio.label}</div>
+          <div class="ratio-value">${ratio.value.toFixed(1)}%</div>
+          <div class="ratio-bar">
+            <div class="ratio-fill" style="width: ${Math.min(ratio.value, 100)}%;"></div>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+    
+    function formatCurrency(num) {
+      if (num === null || num === undefined) return '-';
+      return num.toLocaleString('ko-KR') + '원';
+    }
   </script>
 </body>
 </html>
