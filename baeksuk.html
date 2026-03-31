@@ -30,7 +30,6 @@
     .login-title { font-size: 24px; font-weight: 700; margin-bottom: 10px; background: linear-gradient(135deg, var(--accent-red), var(--accent-yellow)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
     .login-subtitle { color: var(--text-secondary); font-size: 14px; margin-bottom: 30px; }
     .login-input { width: 100%; padding: 16px; background: var(--bg-tertiary); border: 2px solid var(--border-color); border-radius: 12px; color: var(--text-primary); font-size: 18px; text-align: center; letter-spacing: 4px; margin-bottom: 20px; }
-    .login-input:focus { outline: none; border-color: var(--accent-red); }
     .login-btn { width: 100%; padding: 16px; background: var(--accent-red); border: none; border-radius: 12px; color: white; font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.3s; }
     .error-message { color: var(--accent-red); font-size: 14px; margin-top: 10px; display: none; }
     .header { background: var(--bg-secondary); padding: 20px; text-align: center; border-bottom: 1px solid var(--border-color); position: sticky; top: 0; z-index: 100; }
@@ -125,7 +124,6 @@
   <script>
     const APP_CONFIG = {
       BRANCH: '백석점',
-      // 사장님 v18.11 서버 주소
       API_ENDPOINT: 'https://script.google.com/macros/s/AKfycby8JIFlUFJrGY7swJ9rHi79Iu5i2Qqq6gZy80WsrGNAHnx2ebctUVG0j8R17-vrmabY/exec'
     };
     
@@ -134,7 +132,7 @@
     document.addEventListener('DOMContentLoaded', init);
     
     function init() {
-      const savedPassword = localStorage.getItem('jangsuhan_wondang_password');
+      const savedPassword = localStorage.getItem('jangsuhan_baekseok_password');
       if (savedPassword) { APP_STATE.password = savedPassword; showMainApp(); } 
       else { showLogin(); }
       
@@ -232,7 +230,7 @@
         { title: '매출액', value: d.revenue.total, isPositive: true, details: { '현금매출': d.revenue.cash, '카드매출': d.revenue.card } },
         { title: '매출원가', value: d.cogs.total, isNegative: true, subCategories: [
           { title: '육류원가', value: d.cogs.육류원가, items: { '고기값': d.cogs.items['고기값'], '특양': d.cogs.items['특양'] } },
-          { title: '식자재&공산품', value: d.cogs.식자재, items: { '미락': d.cogs.items['미락'], '콩나물': d.cogs.items['콩나물'], '마트': d.cogs.items['마트'] } },
+          { title: '식자재&공산품', value: d.cogs.식자재, items: { '미락': d.cogs.items['미락'], '콩나물': d.cogs.items['콩나물'], '네이버주문': d.cogs.items['네이버주문'], '마트': d.cogs.items['마트'], '쿠팡': d.cogs.items['쿠팡'] } },
           { title: '주류원가', value: d.cogs.주류원가 }, { title: '음료원가', value: d.cogs.음료원가 }
         ]},
         { title: '매출이익', value: d.grossProfit, isPositive: true },
@@ -273,13 +271,32 @@
         container.appendChild(div);
       });
 
-      // 비율 차트
+      // 비율 분석: 사장님 요청 9대 지표 세분화
       const ratioGrid = document.getElementById('ratioGrid');
       ratioGrid.innerHTML = '';
-      const rev = d.revenue.total || 1;
-      const ratios = [{l:'원가율', v:(d.cogs.total/rev)*100}, {l:'인건비율', v:(d.laborCost.total/rev)*100}, {l:'순이익률', v:(d.netProfit/rev)*100}];
+      const rev = d.revenue.total || 1; // 0나누기 방지
+      
+      const ratios = [
+        { l: '육류원가', v: (d.cogs.육류원가 / rev) * 100 },
+        { l: '식자재&공산품', v: (d.cogs.식자재 / rev) * 100 },
+        { l: '주류원가', v: (d.cogs.주류원가 / rev) * 100 },
+        { l: '음료원가', v: (d.cogs.음료원가 / rev) * 100 },
+        { l: '인건비', v: (d.laborCost.total / rev) * 100 },
+        { l: '임대료', v: (d.rent / rev) * 100 },
+        { l: '고정비', v: (d.fixedCost.total / rev) * 100 },
+        { l: '변동비', v: (d.variableCost.total / rev) * 100 },
+        { l: '순이익률', v: (d.netProfit / rev) * 100 }
+      ];
+
       ratios.forEach(r => {
-        ratioGrid.innerHTML += `<div class="ratio-card"><div class="ratio-label">${r.l}</div><div class="ratio-value">${r.v.toFixed(1)}%</div><div class="ratio-bar"><div class="ratio-fill" style="width:${Math.min(r.v, 100)}%"></div></div></div>`;
+        ratioGrid.innerHTML += `
+          <div class="ratio-card">
+            <div class="ratio-label">${r.l}</div>
+            <div class="ratio-value">${r.v.toFixed(1)}%</div>
+            <div class="ratio-bar">
+              <div class="ratio-fill" style="width: ${Math.min(r.v, 100)}%;"></div>
+            </div>
+          </div>`;
       });
     }
 
