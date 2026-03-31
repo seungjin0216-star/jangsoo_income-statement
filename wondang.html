@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="원당점">
   
-  <!-- 아이콘 설정: 깃허브 icons 폴더의 이미지를 직접 참조합니다 -->
+  <!-- 아이콘 설정: 깃허브 icons 폴더의 이미지를 참조합니다 -->
   <link rel="apple-touch-icon" href="icons/wondang-icon.png">
   <link rel="icon" type="image/png" href="icons/wondang-icon.png">
   
@@ -21,7 +21,7 @@
       --accent-blue: #3b82f6; --accent-yellow: #fbbf24; --accent-green: #22c55e;
       --border-color: #3a3a3a;
     }
-    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg-primary); color: var(--text-primary); min-height: 100vh; padding-bottom: 60px; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Apple SD Gothic Neo', sans-serif; background: var(--bg-primary); color: var(--text-primary); min-height: 100vh; padding-bottom: 60px; }
     .loading-screen { position: fixed; inset: 0; background: var(--bg-primary); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; }
     .loading-spinner { width: 50px; height: 50px; border: 4px solid var(--bg-tertiary); border-top-color: var(--accent-red); border-radius: 50%; animation: spin 1s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -31,6 +31,7 @@
     .login-title { font-size: 24px; font-weight: 700; margin-bottom: 10px; background: linear-gradient(135deg, var(--accent-red), var(--accent-yellow)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
     .login-subtitle { color: var(--text-secondary); font-size: 14px; margin-bottom: 30px; }
     .login-input { width: 100%; padding: 16px; background: var(--bg-tertiary); border: 2px solid var(--border-color); border-radius: 12px; color: var(--text-primary); font-size: 18px; text-align: center; letter-spacing: 4px; margin-bottom: 20px; }
+    .login-input:focus { outline: none; border-color: var(--accent-red); }
     .login-btn { width: 100%; padding: 16px; background: var(--accent-red); border: none; border-radius: 12px; color: white; font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.3s; }
     .error-message { color: var(--accent-red); font-size: 14px; margin-top: 10px; display: none; }
     .header { background: var(--bg-secondary); padding: 20px; text-align: center; border-bottom: 1px solid var(--border-color); position: sticky; top: 0; z-index: 100; }
@@ -106,7 +107,7 @@
     
     <div class="summary-card">
       <div class="summary-label">매출 순 이익</div>
-      <div class="summary-value" id="summaryValue">-</div>
+      <div class="summary-value" id="summaryValue">- 원</div>
       <div class="summary-date" id="summaryDate">-</div>
     </div>
     
@@ -189,17 +190,29 @@
       finally { document.getElementById('loadingScreen').style.display = 'none'; }
     }
 
+    /**
+     * 🧠 지능형 데이터 매칭 로직
+     */
     function parsePnlData(pnlData, latestDay) {
       const map = {};
-      pnlData.forEach(item => { map[item.label.replace(/\s/g, "")] = item.value; });
-      const getV = (k) => map[k.replace(/\s/g, "")] || 0;
+      pnlData.forEach(item => { 
+        const cleanKey = item.label.replace(/\s/g, "").replace(/[0-9.]/g, "");
+        map[cleanKey] = item.value; 
+      });
+      
+      const getV = (k) => {
+        const target = k.replace(/\s/g, "");
+        if (map[target] !== undefined) return map[target];
+        const foundKey = Object.keys(map).find(key => key.includes(target) || target.includes(key));
+        return foundKey ? map[foundKey] : 0;
+      };
 
       return {
         revenue: { total: getV('매출액'), cash: getV('현금매출'), card: getV('카드매출') },
         cogs: {
           total: getV('매출원가'),
-          육류원가: getV('육류원가'),
-          식자재: getV('식자재&공산품'),
+          육류원가: getV('육류원가') || (getV('고기값') + getV('특양')),
+          식자재: getV('식자재') || (getV('미락') + getV('콩나물') + getV('마트')),
           주류원가: getV('주류원가'),
           음료원가: getV('음료원가'),
           items: {
@@ -211,7 +224,7 @@
         laborCost: { total: getV('인건비'), items: { '직원급여': getV('직원급여'), '알바급여': getV('알바급여') } },
         rent: getV('임대료'),
         fixedCost: { total: getV('고정비'), items: { '화재보험': getV('화재보험'), '정수기렌탈': getV('정수기렌탈'), '세무사비용': getV('세무사비용') } },
-        variableCost: { total: getV('변동비'), items: { '카드수수료': getV('카드수수료'), '매장관리비': getV('매장관리비(전기,수도)'), '가스사용료': getV('가스사용료'), '광고비용': getV('광고비용'), '기타비용': getV('기타비용') } },
+        variableCost: { total: getV('변동비'), items: { '카드수수료': getV('카드수수료'), '매장관리비': getV('매장관리비') || getV('관리비'), '가스사용료': getV('가스사용료'), '광고비용': getV('광고비용'), '기타비용': getV('기타비용') } },
         operatingProfit: getV('영업이익'),
         tax: { total: getV('세금예수금'), items: { '부가세예수금': getV('부가세예수금'), '종합소득세예수금': getV('종합소득세예수금') } },
         netProfit: getV('순이익') || getV('매출순이익'),
@@ -223,7 +236,7 @@
       const d = APP_STATE.data;
       if(!d) return;
       document.getElementById('summaryValue').textContent = formatCurrency(d.netProfit);
-      document.getElementById('summaryDate').textContent = d.lastUpdatedDay !== '-' ? `'${d.lastUpdatedDay}일'까지의 손익계산서` : '데이터 업데이트 필요';
+      document.getElementById('summaryDate').textContent = d.lastUpdatedDay !== '-' ? `'${d.lastUpdatedDay}일'까지의 손익계산서` : '정산 데이터 집계 중';
       
       const container = document.getElementById('plContent');
       container.innerHTML = '';
@@ -273,11 +286,10 @@
         container.appendChild(div);
       });
 
-      // 비율 분석: 사장님 요청 9대 지표 세분화
+      // 📊 9대 비율 분석 자동 렌더링
       const ratioGrid = document.getElementById('ratioGrid');
       ratioGrid.innerHTML = '';
       const rev = d.revenue.total || 1; 
-      
       const ratios = [
         { l: '육류원가', v: (d.cogs.육류원가 / rev) * 100 },
         { l: '식자재&공산품', v: (d.cogs.식자재 / rev) * 100 },
@@ -289,16 +301,8 @@
         { l: '변동비', v: (d.variableCost.total / rev) * 100 },
         { l: '순이익률', v: (d.netProfit / rev) * 100 }
       ];
-
       ratios.forEach(r => {
-        ratioGrid.innerHTML += `
-          <div class="ratio-card">
-            <div class="ratio-label">${r.l}</div>
-            <div class="ratio-value">${r.v.toFixed(1)}%</div>
-            <div class="ratio-bar">
-              <div class="ratio-fill" style="width: ${Math.min(r.v, 100)}%;"></div>
-            </div>
-          </div>`;
+        ratioGrid.innerHTML += `<div class="ratio-card"><div class="ratio-label">${r.l}</div><div class="ratio-value">${r.v.toFixed(1)}%</div><div class="ratio-bar"><div class="ratio-fill" style="width: ${Math.min(r.v, 100)}%;"></div></div></div>`;
       });
     }
 
