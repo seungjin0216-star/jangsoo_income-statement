@@ -338,20 +338,25 @@
     }
     
     .account-card {
-      background: #3a3f47;
+      background: #454c56;
       border-radius: 16px;
-      padding: 16px;
+      padding: 18px 16px;
       cursor: pointer;
       transition: all 0.2s ease;
+      min-height: 90px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
     }
     
     .account-card:active {
-      background: #42474f;
+      background: #4f5660;
     }
     
     .account-header {
       display: flex;
       align-items: center;
+      justify-content: center;
       gap: 12px;
     }
     
@@ -381,18 +386,19 @@
     
     .account-label {
       font-size: 13px;
-      color: #8b8b8b;
-      font-weight: 600;
+      color: #b8bec7;
+      font-weight: 700;
     }
     
     .account-value {
-      font-size: 17px;
-      font-weight: 700;
-      letter-spacing: -0.3px;
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      white-space: nowrap;
     }
     
-    .account-value.positive { color: #4a90e2; }
-    .account-value.negative { color: #e74c3c; }
+    .account-value.positive { color: #3b82f6; }
+    .account-value.negative { color: #ef4444; }
     
     .account-chevron {
       width: 20px;
@@ -433,17 +439,18 @@
     
     .detail-label {
       font-size: 12px;
-      color: #8b8b8b;
-      font-weight: 600;
-    }
-    
-    .detail-value {
-      font-size: 13px;
+      color: #b8bec7;
       font-weight: 700;
     }
     
-    .detail-value.positive { color: #4a90e2; }
-    .detail-value.negative { color: #e74c3c; }
+    .detail-value {
+      font-size: 14px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    
+    .detail-value.positive { color: #3b82f6; }
+    .detail-value.negative { color: #ef4444; }
     
     .hidden { display: none !important; }
   </style>
