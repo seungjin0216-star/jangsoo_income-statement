@@ -4,13 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   
-  <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIuuwseyEneygkCIsCiAgInNob3J0X25hbWUiOiAi67Cx7IS9IiwKICAic3RhcnRfdXJsIjogIi4vYmFla3Nlb2stdWx0aW1hdGUuaHRtbCIsCiAgImRpc3BsYXkiOiAic3RhbmRhbG9uZSIsCiAgImJhY2tncm91bmRfY29sb3IiOiAiIzFhMWQyNCIsCiAgInRoZW1lX2NvbG9yIjogIiMxYTFkMjQiLAogICJpY29ucyI6IFsKICAgIHsKICAgICAgInNyYyI6ICIuL2ljb25zL0JhZWtzZW9rLXVsdGltYXRlLWljb24ucG5nIiwKICAgICAgInNpemVzIjogIjUxMng1MTIiLAogICAgICAidHlwZSI6ICJpbWFnZS9wbmciLAogICAgICAicHVycG9zZSI6ICJhbnkgbWFza2FibGUiCiAgICB9CiAgXQp9">
+  <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIuuwseyEneygkCIsCiAgInNob3J0X25hbWUiOiAi67Cx7IS9IiwKICAic3RhcnRfdXJsIjogIi4vQmFla3Nlb2slMjB1bHRpbWF0ZS5odG1sIiwKICAiZGlzcGxheSI6ICJzdGFuZGFsb25lIiwKICAiYmFja2dyb3VuZF9jb2xvciI6ICIjMWExZDI0IiwKICAidGhlbWVfY29sb3IiOiAiIzFhMWQyNCIsCiAgImljb25zIjogWwogICAgewogICAgICAic3JjIjogIi4vaWNvbnMvQmFla3Nlb2slMjB1bHRpbWF0ZS1pY29uLnBuZyIsCiAgICAgICJzaXplcyI6ICI1MTJ4NTEyIiwKICAgICAgInR5cGUiOiAiaW1hZ2UvcG5nIiwKICAgICAgInB1cnBvc2UiOiAiYW55IG1hc2thYmxlIgogICAgfQogIF0KfQ==">
 
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="백석점">
   
-  <link rel="apple-touch-icon" href="./icons/Baekseok-ultimate-icon.png">
+  <link rel="apple-touch-icon" href="./icons/Baekseok ultimate-icon.png">
   
   <meta name="theme-color" content="#1a1d24">
   
@@ -28,7 +28,6 @@
       padding-bottom: 40px;
     }
     
-    /* 로딩 화면 - 재미있는 애니메이션 */
     .loading-screen {
       position: fixed;
       inset: 0;
@@ -147,7 +146,6 @@
       50% { opacity: 0.5; }
     }
     
-    /* 로그인 화면 */
     .login-container {
       display: none;
       position: fixed;
@@ -189,7 +187,6 @@
     .login-btn { width: 100%; padding: 14px; background: #c9a055; border: none; border-radius: 12px; color: #2d3238; font-size: 16px; font-weight: 700; cursor: pointer; }
     .error-message { color: #ff6b6b; font-size: 13px; margin-top: 12px; display: none; }
     
-    /* 헤더 */
     .header {
       background: #1a1d24;
       padding: 16px 20px;
@@ -208,7 +205,6 @@
     
     .header-logo::before { content: '🥩'; font-size: 22px; }
     
-    /* 날짜 바 */
     .date-bar {
       display: flex;
       align-items: center;
@@ -234,7 +230,6 @@
     
     .date-select:focus { outline: none; border-color: #d4af6a; }
     
-    /* 메인 카드 */
     .main-card { margin: 20px 16px; padding: 0; position: relative; }
     
     .main-card-inner {
@@ -263,12 +258,10 @@
     .card-change .green { color: #6dd47e; }
     .card-change .red { color: #ff6b6b; }
     
-    /* 손익계산서 타이틀 */
     .section-header { padding: 12px 16px 0 16px; }
     .section-title { font-size: 15px; font-weight: 700; color: #ffffff; margin-bottom: 10px; }
     .section-divider { height: 2px; background: linear-gradient(to right, #e85d4f 50%, #3a3f47 50%); margin-bottom: 16px; }
     
-    /* 차트 영역 */
     .charts-container {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -276,7 +269,6 @@
       padding: 0 16px 16px 16px;
     }
     
-    /* 파이 차트 */
     .pie-chart-wrapper {
       position: relative;
       width: 140px;
@@ -298,7 +290,6 @@
     
     #pieChart { width: 100%; height: 100%; }
     
-    /* 비율 분석 리스트 */
     .ratio-list {
       display: flex;
       flex-direction: column;
@@ -331,7 +322,6 @@
       font-weight: 700;
     }
     
-    /* 계정 그리드 */
     .accounts-grid {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
@@ -547,7 +537,8 @@
   <script>
     const APP_CONFIG = {
       BRANCH: '백석점',
-      API_ENDPOINT: 'https://script.google.com/macros/s/AKfycbw3GiQuAyD-qhdNA0itHW99MR5BKYWUGhMYDvDkPoShvix5_oyPbWapk9leyww5WI5r/exec'
+      API_ENDPOINT: 'https://script.google.com/macros/s/AKfycbw3GiQuAyD-qhdNA0itHW99MR5BKYWUGhMYDvDkPoShvix5_oyPbWapk9leyww5WI5r/exec',
+      DATA_RANGE: { start: 13, end: 46 } // B13 ~ C46
     };
     
     const APP_STATE = { password: null, currentYear: 2026, currentMonth: 3, data: null, prevData: null };
@@ -568,7 +559,6 @@
     
     document.addEventListener('DOMContentLoaded', init);
     
-    // 로딩 애니메이션
     let calcInterval;
     function startLoadingAnimation() {
       const screen = document.querySelector('.calc-screen');
@@ -682,41 +672,104 @@
       return null;
     }
 
+    /**
+     * 🆕 새 계정 구조 파싱 함수
+     */
     function parsePnlData(pnlData, latestDay) {
       const map = {};
       pnlData.forEach(item => { 
-        const cleanKey = item.label.replace(/\s/g, "").replace(/[0-9.]/g, "");
+        const cleanKey = item.label.replace(/\s/g, "").replace(/[0-9.%]/g, "");
         map[cleanKey] = item.value; 
       });
       
       const getV = (k) => {
-        const target = k.replace(/\s/g, "");
+        const target = k.replace(/\s/g, "").replace(/[()]/g, "");
         if (map[target] !== undefined) return map[target];
-        const foundKey = Object.keys(map).find(key => key.includes(target) || target.includes(key));
+        const foundKey = Object.keys(map).find(key => 
+          key.includes(target) || target.includes(key) || 
+          key.replace(/[()&,]/g, "").includes(target.replace(/[()&,]/g, ""))
+        );
         return foundKey ? map[foundKey] : 0;
       };
 
       return {
-        revenue: { total: getV('매출액'), cash: getV('현금매출'), card: getV('카드매출') },
+        // 매출액
+        revenue: { 
+          total: getV('매출액'),
+          cash: getV('현금매출'),
+          card: getV('카드매출'),
+          delivery: getV('배달매출')
+        },
+        
+        // 매출원가
         cogs: { 
           total: getV('매출원가'),
-          육류원가: getV('육류원가') || (getV('고기값') + getV('특양')),
-          식자재: getV('식자재') || (getV('미락') + getV('콩나물') + getV('마트')),
-          주류원가: getV('주류원가'),
-          음료원가: getV('음료원가'),
-          items: {
-            '고기값': getV('고기값'), '특양': getV('특양'),
-            '미락': getV('미락'), '콩나물': getV('콩나물'), '마트': getV('마트')
-          }
+          육류원가: getV('육류원가'),
+          고기값: getV('고기값'),
+          식자재공산품: getV('식자재&공산품') || getV('식자재공산품'),
+          미락: getV('미락'),
+          콩나물: getV('콩나물'),
+          가게카드: getV('가게카드네이버쿠팡특양') || getV('가게카드'),
+          키위: getV('키위본성') || getV('키위'),
+          가게내부카드: getV('가게내부카드'),
+          가게외부카드: getV('가게외부카드네이버쿠팡특양') || getV('가게외부카드')
         },
+        
+        // 주류/음료
+        alcohol: getV('주류원가'),
+        beverage: getV('음료원가'),
+        
+        // 매출이익
         grossProfit: getV('매출이익'),
-        laborCost: { total: getV('인건비'), items: { '직원급여': getV('직원급여'), '알바급여': getV('알바급여') } },
+        
+        // 인건비
+        laborCost: { 
+          total: getV('인건비'),
+          staff: getV('직원급여') || getV('직원'),
+          parttime: getV('알바급여') || getV('알바')
+        },
+        
+        // 임대료
         rent: getV('임대료'),
-        fixedCost: { total: getV('고정비'), items: { '화재보험': getV('화재보험'), '정수기렌탈': getV('정수기렌탈'), '세무사비용': getV('세무사비용'), '가게위생비': getV('가게위생비') } },
-        variableCost: { total: getV('변동비'), items: { '카드수수료': getV('카드수수료'), '매장관리비': getV('매장관리비'), '가스사용료': getV('가스사용료'), '기타잡비용': getV('기타잡비용') } },
+        
+        // 고정비
+        fixedCost: { 
+          total: getV('고정비'),
+          insurance: getV('화재보험'),
+          water: getV('정수기렌탈') || getV('정수기'),
+          kt: getV('KT통신요금') || getV('통신요금'),
+          tax: getV('세무사비용'),
+          hygiene: getV('가게위생비') || getV('위생비'),
+          tableling: getV('테이블링'),
+          telecom: getV('통신요금'),
+          식비: getV('식비')
+        },
+        
+        // 변동비
+        variableCost: { 
+          total: getV('변동비'),
+          cardFee: getV('카드수수료'),
+          management: getV('매장관리비전기수도') || getV('매장관리비'),
+          gas: getV('가스사용료매장') || getV('가스사용료'),
+          naver: getV('네이버광고비용'),
+          misc: getV('기타잡비용') || getV('기타'),
+          기타세금: getV('기타세금'),
+          보험: getV('4대보험')
+        },
+        
+        // 영업이익
         operatingProfit: getV('영업이익'),
-        tax: { total: getV('세금예수금'), items: { '부가세예수금': getV('부가세예수금'), '종합소득세예수금': getV('종합소득세예수금') } },
-        netProfit: getV('순이익') || getV('매출순이익'),
+        
+        // 세금
+        taxReserve: { 
+          total: getV('세금예수금'),
+          vat: getV('부가세예수금') || getV('부가세'),
+          income: getV('종합소득세예수금') || getV('종소세')
+        },
+        
+        // 순이익
+        netProfit: getV('매출순이익') || getV('순이익'),
+        
         lastUpdatedDay: latestDay
       };
     }
@@ -725,8 +778,10 @@
       const d = APP_STATE.data;
       if (!d) return;
       
+      // 메인 카드
       document.getElementById('mainValue').textContent = formatCurrency(d.netProfit);
       
+      // 전월 대비
       if (APP_STATE.prevData && APP_STATE.prevData.netProfit) {
         const change = ((d.netProfit - APP_STATE.prevData.netProfit) / APP_STATE.prevData.netProfit * 100).toFixed(1);
         const arrow = change >= 0 ? '▲' : '▼';
@@ -736,8 +791,13 @@
         document.getElementById('changePercent').className = className;
       }
       
+      // 파이 차트
       renderPieChart(d);
+      
+      // 비율 분석 리스트
       renderRatioList(d);
+      
+      // 계정 그리드
       renderAccounts(d);
     }
 
@@ -751,43 +811,23 @@
       
       const revenue = d.revenue.total || 1;
       
-      // 순이익이 잘 보이도록 밝은 청록색
+      // 순이익 + 비용 항목
       const segments = [
-        { label: '육류원가', value: d.cogs.육류원가, color: '#e85d4f' },
-        { label: '식자재', value: d.cogs.식자재, color: '#c9a055' },
-        { label: '주류원가', value: d.cogs.주류원가, color: '#9b7ebd' },
-        { label: '음료원가', value: d.cogs.음료원가, color: '#70ad47' },
+        { label: '순이익', value: d.netProfit, color: '#00D9FF' },
+        { label: '육류원가', value: d.cogs.육류원가 + d.cogs.고기값, color: '#e85d4f' },
+        { label: '식자재&공산품', value: d.cogs.식자재공산품 + d.cogs.미락 + d.cogs.콩나물 + d.cogs.가게카드, color: '#c9a055' },
+        { label: '주류원가', value: d.alcohol, color: '#9b7ebd' },
+        { label: '음료원가', value: d.beverage, color: '#70ad47' },
         { label: '인건비', value: d.laborCost.total, color: '#f7931e' },
         { label: '임대료', value: d.rent, color: '#8b8b8b' },
         { label: '고정비', value: d.fixedCost.total, color: '#6b7280' },
         { label: '변동비', value: d.variableCost.total, color: '#5a6268' }
       ];
       
-      // 순이익 (밝은 청록색)
-      const netProfitSegment = { label: '순이익', value: d.netProfit, color: '#00D9FF' };
-      
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       
       let startAngle = -Math.PI / 2;
       
-      // 순이익 먼저 그리기
-      if (netProfitSegment.value > 0) {
-        const sliceAngle = (netProfitSegment.value / revenue) * 2 * Math.PI;
-        
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, radius, startAngle, startAngle + sliceAngle);
-        ctx.arc(centerX, centerY, innerRadius, startAngle + sliceAngle, startAngle, true);
-        ctx.closePath();
-        ctx.fillStyle = netProfitSegment.color;
-        ctx.fill();
-        ctx.strokeStyle = '#2d3238';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        
-        startAngle += sliceAngle;
-      }
-      
-      // 나머지 비용들
       segments.forEach(seg => {
         if (seg.value > 0) {
           const sliceAngle = (seg.value / revenue) * 2 * Math.PI;
@@ -816,10 +856,10 @@
       
       const ratios = [
         { label: '순이익', value: d.netProfit, color: '#00D9FF' },
-        { label: '육류원가', value: d.cogs.육류원가, color: '#e85d4f' },
-        { label: '식자재', value: d.cogs.식자재, color: '#c9a055' },
-        { label: '주류원가', value: d.cogs.주류원가, color: '#9b7ebd' },
-        { label: '음료원가', value: d.cogs.음료원가, color: '#70ad47' },
+        { label: '육류원가', value: d.cogs.육류원가 + d.cogs.고기값, color: '#e85d4f' },
+        { label: '식자재', value: d.cogs.식자재공산품 + d.cogs.미락 + d.cogs.콩나물 + d.cogs.가게카드, color: '#c9a055' },
+        { label: '주류원가', value: d.alcohol, color: '#9b7ebd' },
+        { label: '음료원가', value: d.beverage, color: '#70ad47' },
         { label: '인건비', value: d.laborCost.total, color: '#f7931e' },
         { label: '임대료', value: d.rent, color: '#8b8b8b' },
         { label: '고정비', value: d.fixedCost.total, color: '#6b7280' },
@@ -838,24 +878,65 @@
       `).join('');
     }
 
+    /**
+     * 🆕 새 계정 구조 렌더링
+     */
     function renderAccounts(d) {
       const container = document.getElementById('accountsGrid');
       
       const accounts = [
-        { icon: ICONS.revenue, label: '매출액', value: d.revenue.total, positive: true, details: { '현금매출': d.revenue.cash, '카드매출': d.revenue.card } },
-        { icon: ICONS.cogs, label: '매출원가', value: d.cogs.total, negative: true, details: d.cogs.items },
+        { 
+          icon: ICONS.revenue, label: '매출액', value: d.revenue.total, positive: true, 
+          details: { '현금매출': d.revenue.cash, '카드매출': d.revenue.card, '배달매출': d.revenue.delivery } 
+        },
+        { 
+          icon: ICONS.cogs, label: '매출원가', value: d.cogs.total, negative: true, 
+          details: {
+            '육류원가': d.cogs.육류원가,
+            '고기값': d.cogs.고기값,
+            '식자재&공산품': d.cogs.식자재공산품,
+            '미락': d.cogs.미락,
+            '콩나물': d.cogs.콩나물,
+            '가게카드': d.cogs.가게카드
+          }
+        },
         { icon: ICONS.profit, label: '매출이익', value: d.grossProfit, positive: true },
-        { icon: ICONS.labor, label: '인건비', value: d.laborCost.total, negative: true, details: d.laborCost.items },
+        { icon: ICONS.cogs, label: '주류원가', value: d.alcohol, negative: true },
+        { icon: ICONS.cogs, label: '음료원가', value: d.beverage, negative: true },
+        { 
+          icon: ICONS.labor, label: '인건비', value: d.laborCost.total, negative: true, 
+          details: { '직원 급여': d.laborCost.staff, '알바 급여': d.laborCost.parttime }
+        },
         { icon: ICONS.rent, label: '임대료', value: d.rent, negative: true },
-        { icon: ICONS.fixed, label: '고정비', value: d.fixedCost.total, negative: true, details: d.fixedCost.items },
-        { icon: ICONS.variable, label: '변동비', value: d.variableCost.total, negative: true, details: d.variableCost.items },
+        { 
+          icon: ICONS.fixed, label: '고정비', value: d.fixedCost.total, negative: true, 
+          details: {
+            '화재보험': d.fixedCost.insurance,
+            '정수기렌탈': d.fixedCost.water,
+            'KT통신요금': d.fixedCost.kt,
+            '세무사비용': d.fixedCost.tax
+          }
+        },
+        { 
+          icon: ICONS.variable, label: '변동비', value: d.variableCost.total, negative: true, 
+          details: {
+            '카드수수료': d.variableCost.cardFee,
+            '매장관리비': d.variableCost.management,
+            '가스사용료': d.variableCost.gas,
+            '네이버광고': d.variableCost.naver,
+            '기타잡비용': d.variableCost.misc
+          }
+        },
         { icon: ICONS.operating, label: '영업이익', value: d.operatingProfit, positive: true },
-        { icon: ICONS.tax, label: '세금예수금', value: d.tax.total, negative: true, details: d.tax.items },
-        { icon: ICONS.net, label: '순이익', value: d.netProfit, positive: true }
+        { 
+          icon: ICONS.tax, label: '세금예수금', value: d.taxReserve.total, negative: true, 
+          details: { '부가세': d.taxReserve.vat, '종소세': d.taxReserve.income }
+        },
+        { icon: ICONS.net, label: '매출 순 이익', value: d.netProfit, positive: true }
       ];
       
       container.innerHTML = accounts.map(acc => {
-        const hasDetails = acc.details && Object.keys(acc.details).length > 0;
+        const hasDetails = acc.details && Object.keys(acc.details).filter(k => acc.details[k] > 0).length > 0;
         const valueClass = acc.positive ? 'positive' : (acc.negative ? 'negative' : '');
         
         return `
@@ -870,7 +951,7 @@
             </div>
             ${hasDetails ? `
               <div class="account-details">
-                ${Object.entries(acc.details).map(([k, v]) => `
+                ${Object.entries(acc.details).filter(([k,v]) => v > 0).map(([k, v]) => `
                   <div class="detail-item">
                     <div class="detail-label">${k}</div>
                     <div class="detail-value ${valueClass}">${formatCurrency(v)}</div>
