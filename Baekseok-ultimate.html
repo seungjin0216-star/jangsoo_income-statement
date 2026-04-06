@@ -1099,19 +1099,6 @@
       }
     }
 
-    function toggleAccount(element) {
-      const isExpanded = element.classList.contains('expanded');
-      const details = element.querySelector('.account-details');
-      
-      if (isExpanded) {
-        element.classList.remove('expanded');
-        details.classList.remove('expanded');
-      } else {
-        element.classList.add('expanded');
-        details.classList.add('expanded');
-      }
-    }
-
     function formatCurrency(n) { 
       return (n || 0).toLocaleString() + '원'; 
     }
