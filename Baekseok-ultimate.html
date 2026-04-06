@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   
-  <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIuuwseyEneygkCIsCiAgInNob3J0X25hbWUiOiAi67Cx7IS9IiwKICAic3RhcnRfdXJsIjogIi4vQmFla3Nlb2slMjB1bHRpbWF0ZS5odG1sIiwKICAiZGlzcGxheSI6ICJzdGFuZGFsb25lIiwKICAiYmFja2dyb3VuZF9jb2xvciI6ICIjMWExZDI0IiwKICAidGhlbWVfY29sb3IiOiAiIzFhMWQyNCIsCiAgImljb25zIjogWwogICAgewogICAgICAic3JjIjogIi4vaWNvbnMvQmFla3Nlb2slMjB1bHRpbWF0ZS1pY29uLnBuZyIsCiAgICAgICJzaXplcyI6ICI1MTJ4NTEyIiwKICAgICAgInR5cGUiOiAiaW1hZ2UvcG5nIiwKICAgICAgInB1cnBvc2UiOiAiYW55IG1hc2thYmxlIgogICAgfQogIF0KfQ==">
+  <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIuybZOu5geygkCIsCiAgInNob3J0X25hbWUiOiAi7JuReadyvCIsCiAgInN0YXJ0X3VybCI6ICIuL1dvbmRhbmclMjB1bHRpbWF0ZS5odG1sIiwKICAiZGlzcGxheSI6ICJzdGFuZGFsb25lIiwKICAiYmFja2dyb3VuZF9jb2xvciI6ICIjMWExZDI0IiwKICAidGhlbWVfY29sb3IiOiAiIzFhMWQyNCIsCiAgImljb25zIjogWwogICAgewogICAgICAic3JjIjogIi4vaWNvbnMvV29uZGFuZyUyMHVsdGltYXRlLWljb24ucG5nIiwKICAgICAgInNpemVzIjogIjUxMng1MTIiLAogICAgICAidHlwZSI6ICJpbWFnZS9wbmciLAogICAgICAicHVycG9zZSI6ICJhbnkgbWFza2FibGUiCiAgICB9CiAgXQp9">
 
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -580,7 +580,7 @@
       DATA_RANGE: { start: 13, end: 46 } // B13 ~ C46
     };
     
-    const APP_STATE = { password: null, currentYear: 2026, currentMonth: 3, data: null, prevData: null };
+    const APP_STATE = { password: null, currentYear: 2026, currentMonth: 4, data: null, prevData: null };
     
     const ICONS = {
       revenue: '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>',
@@ -669,7 +669,7 @@
         yp.innerHTML += `<option value="${y}" ${y === 2026 ? 'selected' : ''}>${y}년</option>`; 
       }
       for (let m = 1; m <= 12; m++) { 
-        mp.innerHTML += `<option value="${m}" ${m === 3 ? 'selected' : ''}>${m}월</option>`; 
+        mp.innerHTML += `<option value="${m}" ${m === 4 ? 'selected' : ''}>${m}월</option>`; 
       }
       
       yp.onchange = (e) => { APP_STATE.currentYear = parseInt(e.target.value); loadAllData(); };
