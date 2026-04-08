@@ -832,9 +832,14 @@
 
     function renderUI() {
       const d = APP_STATE.data;
-      if (!d) return;
+      console.log('🔍 renderUI 시작', d);
+      if (!d) {
+        console.error('❌ 데이터 없음!');
+        return;
+      }
       
       // 메인 카드
+      console.log('✅ 메인 카드 렌더링');
       document.getElementById('mainValue').textContent = formatCurrency(d.netProfit);
       
       // 전월 대비
@@ -848,13 +853,17 @@
       }
       
       // 파이 차트
+      console.log('✅ 파이 차트 렌더링');
       renderPieChart(d);
       
       // 비율 분석 리스트
+      console.log('✅ 비율 리스트 렌더링');
       renderRatioList(d);
       
       // 계정 그리드
+      console.log('✅ 계정 그리드 렌더링 시작');
       renderAccounts(d);
+      console.log('✅ 계정 그리드 렌더링 완료');
     }
 
     function renderPieChart(d) {
@@ -938,6 +947,7 @@
      * 🆕 새 계정 구조 렌더링 (2단계 아코디언 지원)
      */
     function renderAccounts(d) {
+      console.log('🔍 renderAccounts 시작', d);
       const container = document.getElementById('accountsGrid');
       
       const accounts = [
@@ -1012,6 +1022,9 @@
         },
         { icon: ICONS.net, label: '매출 순 이익', value: d.netProfit, positive: true }
       ];
+      
+      console.log('📊 accounts 배열:', accounts.length, '개');
+      console.log('📦 첫 번째 계정:', accounts[0]);
       
       container.innerHTML = accounts.map((acc, idx) => {
         const hasItems = acc.items && acc.items.filter(item => item.value > 0).length > 0;
