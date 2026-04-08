@@ -1019,7 +1019,7 @@
         const cardId = `account-${idx}`;
         
         return `
-          <div class="account-card" id="${cardId}" ${hasItems ? `onclick="toggleAccount('${cardId}')"` : ''}>
+          <div class="account-card" id="${cardId}" data-clickable="${hasItems}">
             <div class="account-header">
               <div class="account-icon">${acc.icon}</div>
               <div class="account-main">
@@ -1036,7 +1036,7 @@
                   if (item.hasSubItems && item.subItems && item.subItems.filter(sub => sub.value > 0).length > 0) {
                     // 2단계 아코디언 (육류원가, 식자재&공산품)
                     return `
-                      <div class="detail-item detail-item-nested" id="${itemId}" onclick="event.stopPropagation(); toggleSubItem('${itemId}');">
+                      <div class="detail-item detail-item-nested" id="${itemId}" data-sub-clickable="true">
                         <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                           <div style="display: flex; align-items: center; gap: 6px; flex: 1;">
                             <div class="account-chevron" style="width: 16px; height: 16px;">${ICONS.chevron}</div>
@@ -1069,6 +1069,38 @@
           </div>
         `;
       }).join('');
+      
+      // ✅ 이벤트 리스너 추가
+      setTimeout(() => {
+        // 대분류 아코디언
+        document.querySelectorAll('.account-card[data-clickable="true"]').forEach(card => {
+          card.addEventListener('click', function(e) {
+            // 하위 아이템 클릭 시 이벤트 버블링 방지
+            if (e.target.closest('.detail-item-nested')) return;
+            
+            const details = this.querySelector('.account-details');
+            if (!details) return;
+            
+            const isExpanded = this.classList.contains('expanded');
+            this.classList.toggle('expanded');
+            details.classList.toggle('expanded');
+          });
+        });
+        
+        // 중분류 아코디언 (육류원가, 식자재&공산품)
+        document.querySelectorAll('.detail-item-nested[data-sub-clickable="true"]').forEach(item => {
+          item.addEventListener('click', function(e) {
+            e.stopPropagation();
+            
+            const subDetails = this.querySelector('.sub-details');
+            if (!subDetails) return;
+            
+            const isExpanded = this.classList.contains('expanded');
+            this.classList.toggle('expanded');
+            subDetails.classList.toggle('expanded');
+          });
+        });
+      }, 100);
     }
 
     function toggleAccount(cardId) {
