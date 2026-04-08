@@ -832,6 +832,13 @@
 
     function renderUI() {
       const d = APP_STATE.data;
+      console.log("🔍 renderUI 시작", d);
+      if (!d) {
+        console.error("❌ 데이터 없음!");
+        return;
+      }
+      
+      const d = APP_STATE.data;
       if (!d) return;
       
       // 메인 카드
@@ -1070,12 +1077,21 @@
         `;
       }).join('');
       
-      // ✅ 이벤트 리스너 추가
-      setTimeout(() => {
+      console.log('🔧 HTML 설정 완료, 이벤트 리스너 추가 시작');
+      
+      // ✅ 이벤트 리스너 추가 (즉시 실행)
+      requestAnimationFrame(() => {
+        const clickableCards = document.querySelectorAll('.account-card[data-clickable="true"]');
+        const nestedItems = document.querySelectorAll('.detail-item-nested[data-sub-clickable="true"]');
+        
+        console.log('🎯 클릭 가능한 카드:', clickableCards.length, '개');
+        console.log('🎯 중첩 아이템:', nestedItems.length, '개');
+        
         // 대분류 아코디언
-        document.querySelectorAll('.account-card[data-clickable="true"]').forEach(card => {
+        clickableCards.forEach((card, idx) => {
           card.addEventListener('click', function(e) {
-            // 하위 아이템 클릭 시 이벤트 버블링 방지
+            console.log('🖱️ 카드 클릭:', idx);
+            
             if (e.target.closest('.detail-item-nested')) return;
             
             const details = this.querySelector('.account-details');
@@ -1084,12 +1100,15 @@
             const isExpanded = this.classList.contains('expanded');
             this.classList.toggle('expanded');
             details.classList.toggle('expanded');
+            
+            console.log('📂', isExpanded ? '닫힘' : '열림');
           });
         });
         
-        // 중분류 아코디언 (육류원가, 식자재&공산품)
-        document.querySelectorAll('.detail-item-nested[data-sub-clickable="true"]').forEach(item => {
+        // 중분류 아코디언
+        nestedItems.forEach((item, idx) => {
           item.addEventListener('click', function(e) {
+            console.log('🖱️ 중첩 아이템 클릭:', idx);
             e.stopPropagation();
             
             const subDetails = this.querySelector('.sub-details');
@@ -1098,9 +1117,13 @@
             const isExpanded = this.classList.contains('expanded');
             this.classList.toggle('expanded');
             subDetails.classList.toggle('expanded');
+            
+            console.log('📂 중첩', isExpanded ? '닫힘' : '열림');
           });
         });
-      }, 100);
+        
+        console.log('✅ 이벤트 리스너 추가 완료');
+      });
     }
 
     function toggleAccount(cardId) {
