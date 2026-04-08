@@ -411,15 +411,14 @@
     }
     
     .account-details {
-  display: flex;
-  flex-direction: column; /* 세로 방향 정렬 */
-  gap: 4px; /* 항목 사이 간격 */
-  padding: 8px 12px;
-  max-height: 0;
-  overflow: hidden;
-  transition: all 0.3s ease-out;
-  background: rgba(255, 255, 255, 0.03); /* 가독성을 위한 배경색 */
-}
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease;
+      margin-top: 0;
+    }
     
     .account-details.expanded {
       max-height: 500px;
@@ -427,11 +426,13 @@
     }
     
     .detail-item {
-  width: 100%;              /* 가로 폭을 전체 사용 */
-  display: flex;
-  justify-content: space-between;
-  padding: 8px 0;
-}
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 10px;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 6px;
+      margin-bottom: 4px;
+    }
     
     .detail-item:last-child {
       margin-bottom: 0;
@@ -1160,21 +1161,18 @@
     }
 
     function toggleAccount(cardId) {
-  const card = document.getElementById(cardId);
-  const details = card.querySelector('.account-details');
-  const isExpanded = card.classList.contains('expanded');
-
-  if (!isExpanded) {
-    card.classList.add('expanded');
-    details.classList.add('expanded');
-    // ✅ 포인트: 내용물의 실제 높이만큼 자동으로 늘어남
-    details.style.maxHeight = details.scrollHeight + "px";
-  } else {
-    card.classList.remove('expanded');
-    details.classList.remove('expanded');
-    details.style.maxHeight = "0px";
-  }
-}
+      const card = document.getElementById(cardId);
+      const isExpanded = card.classList.contains('expanded');
+      const details = card.querySelector('.account-details');
+      
+      if (isExpanded) {
+        card.classList.remove('expanded');
+        details.classList.remove('expanded');
+      } else {
+        card.classList.add('expanded');
+        details.classList.add('expanded');
+      }
+    }
 
     function toggleSubItem(itemId) {
       const item = document.getElementById(itemId);
