@@ -1,0 +1,14 @@
+{
+  "name": "장수한우 원당점",
+  "short_name": "원당점",
+  "description": "장수한우 원당점 영수증 업로드",
+  "start_url": "./wondang.html",
+  "display": "standalone",
+  "background_color": "#1f0d07",
+  "theme_color": "#1f0d07",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "./icons/icon.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "./icons/icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
