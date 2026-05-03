@@ -1,28 +1,552 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
-<link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIuyepeyImO2VnOyasCDsm5Dri7nsoJAiLAogICJzaG9ydF9uYW1lIjogIuybkOuLueygkCIsCiAgImJhY2tncm91bmRfY29sb3IiOiAiI0ZGNkIzNSIsCiAgInRoZW1lX2NvbG9yIjogIiNGRjZCMzUiLAogICJkaXNwbGF5IjogInN0YW5kYWxvbmUiLAogICJzdGFydF91cmwiOiAiLiIsCiAgImljb25zIjogWwogICAgewogICAgICAic3JjIjogIi4vaWNvbnMvaWNvbi5wbmciLAogICAgICAic2l6ZXMiOiAiMTkyeDE5MiIsCiAgICAgICJ0eXBlIjogImltYWdlL3BuZyIKICAgIH0sCiAgICB7CiAgICAgICJzcmMiOiAiLi9pY29ucy9pY29uLnBuZyIsCiAgICAgICJzaXplcyI6ICI1MTJ4NTEyIiwKICAgICAgInR5cGUiOiAiaW1hZ2UvcG5nIgogICAgfQogIF0KfQ==">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="원당점">
 <link rel="apple-touch-icon" href="./icons/icon.png">
-<meta name="theme-color" content="#FF6B35">
+<link rel="manifest" href="./manifest_wondang.json">
+<meta name="theme-color" content="#1f0d07">
 <title>장수한우 원당점</title>
 <style>
-body{margin:0;background:#FF6B35;display:flex;justify-content:center;align-items:center;min-height:100vh;font-family:-apple-system,sans-serif}
-.msg{color:#fff;font-size:20px;font-weight:700;text-align:center}
-img{width:72px;height:72px;border-radius:16px;margin-bottom:16px;display:block;margin-left:auto;margin-right:auto}
+  :root {
+    --orange: #b5451b;
+    --orange-light: #d4622a;
+    --orange-dark: #3d1a0a;
+    --accent: #ffd6b0;
+    --bg: #1f0d07;
+    --surface: #2b1608;
+    --surface2: #3d2010;
+    --border: rgba(255,180,120,0.12);
+    --text: #fff5ee;
+    --text2: #c49070;
+    --gold: #d4a847;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    font-family: -apple-system, 'SF Pro Display', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow-x: hidden;
+  }
+
+  #splash {
+    position: fixed; inset: 0; z-index: 999;
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 20px;
+    transition: opacity 0.4s ease;
+  }
+  #splash.hide { opacity: 0; pointer-events: none; }
+  .splash-icon {
+    width: 96px; height: 96px;
+    background: var(--surface2);
+    border-radius: 24px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 48px;
+    box-shadow: 0 0 40px rgba(181,69,27,0.5);
+    animation: pulse 2s ease infinite;
+  }
+  @keyframes pulse {
+    0%,100% { box-shadow: 0 0 40px rgba(181,69,27,0.5); }
+    50% { box-shadow: 0 0 60px rgba(181,69,27,0.8); }
+  }
+  .splash-title { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+  .splash-sub { font-size: 14px; color: var(--text2); }
+
+  .header {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(31,13,7,0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    padding: env(safe-area-inset-top) 20px 0;
+  }
+  .header-inner {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 0;
+  }
+  .header-left { display: flex; align-items: center; gap: 10px; }
+  .header-badge {
+    background: var(--orange);
+    color: var(--accent);
+    font-size: 11px; font-weight: 700;
+    padding: 3px 10px; border-radius: 20px;
+    letter-spacing: 0.5px;
+  }
+  .header-title { font-size: 18px; font-weight: 700; }
+  .queue-badge {
+    background: var(--gold);
+    color: #000;
+    font-size: 12px; font-weight: 800;
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    display: none; align-items: center; justify-content: center;
+  }
+  .queue-badge.show { display: flex; }
+
+  .main {
+    padding: 24px 20px;
+    padding-bottom: calc(env(safe-area-inset-bottom) + 24px);
+    max-width: 480px; margin: 0 auto;
+  }
+
+  .section { margin-bottom: 28px; }
+  .section-label {
+    font-size: 11px; font-weight: 700;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 12px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .section-label::after {
+    content: '';
+    flex: 1; height: 1px;
+    background: var(--border);
+  }
+
+  .doc-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .doc-btn {
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 16px;
+    padding: 16px 14px;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.15s ease;
+    display: flex; flex-direction: column; gap: 6px;
+    position: relative; overflow: hidden;
+  }
+  .doc-btn::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(135deg, rgba(255,180,120,0.05), transparent);
+    opacity: 0; transition: opacity 0.15s;
+  }
+  .doc-btn.sel { border-color: var(--orange-light); background: var(--surface2); }
+  .doc-btn.sel::before { opacity: 1; }
+  .doc-btn:active { transform: scale(0.97); }
+  .doc-emoji { font-size: 24px; line-height: 1; }
+  .doc-name { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.2; }
+  .doc-desc { font-size: 11px; color: var(--text2); }
+  .doc-check {
+    position: absolute; top: 10px; right: 10px;
+    width: 18px; height: 18px;
+    background: var(--orange-light);
+    border-radius: 50%;
+    display: none; align-items: center; justify-content: center;
+    font-size: 10px;
+  }
+  .doc-btn.sel .doc-check { display: flex; }
+
+  .photo-area {
+    background: var(--surface);
+    border: 2px dashed var(--border);
+    border-radius: 20px;
+    padding: 40px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative; overflow: hidden;
+  }
+  .photo-area.has {
+    border-color: var(--orange-light);
+    border-style: solid;
+    background: var(--surface2);
+    padding: 16px;
+  }
+  .photo-area:active { transform: scale(0.99); }
+  .photo-icon { font-size: 40px; margin-bottom: 10px; }
+  .photo-title { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+  .photo-sub { font-size: 13px; color: var(--text2); }
+  #preview {
+    width: 100%; max-height: 200px;
+    object-fit: contain; border-radius: 12px;
+    display: none;
+  }
+  .photo-area.has #preview { display: block; }
+  .photo-area.has .photo-placeholder { display: none; }
+  #fileInput { display: none; }
+
+  .add-btn {
+    width: 100%; padding: 16px;
+    background: transparent;
+    border: 1.5px solid var(--orange-light);
+    color: var(--accent);
+    border-radius: 14px;
+    font-size: 15px; font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-top: 12px;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .add-btn:not(:disabled):active { background: rgba(181,69,27,0.1); transform: scale(0.98); }
+  .add-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  .queue-list { display: flex; flex-direction: column; gap: 8px; }
+  .queue-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 16px;
+    display: flex; align-items: center; gap: 12px;
+    animation: slideIn 0.2s ease;
+  }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .qi-num {
+    width: 28px; height: 28px;
+    background: var(--surface2);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 800;
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+  .qi-info { flex: 1; min-width: 0; }
+  .qi-type { font-size: 14px; font-weight: 700; }
+  .qi-file { font-size: 12px; color: var(--text2); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .qi-status { font-size: 20px; flex-shrink: 0; }
+
+  .submit-btn {
+    width: 100%; padding: 18px;
+    background: linear-gradient(135deg, var(--orange), var(--orange-light));
+    color: #fff;
+    border: none; border-radius: 18px;
+    font-size: 17px; font-weight: 800;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: -0.3px;
+    box-shadow: 0 4px 24px rgba(181,69,27,0.4);
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .submit-btn:not(:disabled):active { transform: scale(0.98); opacity: 0.9; }
+  .submit-btn:disabled { opacity: 0.3; cursor: not-allowed; box-shadow: none; }
+
+  .result-overlay {
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(31,13,7,0.95);
+    backdrop-filter: blur(20px);
+    display: none;
+    flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 20px; padding: 40px;
+    text-align: center;
+  }
+  .result-overlay.show { display: flex; }
+  .result-icon { font-size: 72px; animation: popIn 0.4s cubic-bezier(0.34,1.56,0.64,1); }
+  @keyframes popIn {
+    from { transform: scale(0); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+  .result-title { font-size: 26px; font-weight: 800; }
+  .result-sub { font-size: 16px; color: var(--text2); line-height: 1.6; white-space: pre-line; }
+  .result-btn {
+    margin-top: 12px; padding: 16px 40px;
+    background: var(--orange);
+    color: #fff; border: none; border-radius: 14px;
+    font-size: 16px; font-weight: 700;
+    cursor: pointer;
+  }
+
+  .loader {
+    display: inline-block;
+    width: 18px; height: 18px;
+    border: 2.5px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .progress-bar {
+    height: 3px; background: var(--border);
+    border-radius: 2px; overflow: hidden;
+    margin-top: 8px; display: none;
+  }
+  .progress-bar.show { display: block; }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--orange), var(--accent));
+    border-radius: 2px;
+    transition: width 0.3s ease;
+    width: 0%;
+  }
 </style>
-<script>
-  window.location.href = "https://script.google.com/macros/s/AKfycbxvvTbp_Wf-zvQ6e17dE2vKsaXdSSTV9vv5RUSPrTc44IxzNPfFJIgQEs944MEYY1WN/exec?store=원당점";
-</script>
 </head>
 <body>
-  <div class="msg">
-    <img src="./icons/icon.png" alt="">
-    🐄 원당점으로 이동 중...
+
+<div id="splash">
+  <div class="splash-icon">🐄</div>
+  <div class="splash-title">장수한우 원당점</div>
+  <div class="splash-sub">영수증 업로드</div>
+</div>
+
+<div class="header">
+  <div class="header-inner">
+    <div class="header-left">
+      <span class="header-badge">원당점</span>
+      <span class="header-title">영수증 업로드</span>
+    </div>
+    <div class="queue-badge" id="queueBadge">0</div>
   </div>
+  <div class="progress-bar" id="progressBar">
+    <div class="progress-fill" id="progressFill"></div>
+  </div>
+</div>
+
+<div class="main">
+
+  <div class="section">
+    <div class="section-label">① 문서 유형</div>
+    <div class="doc-grid" id="docGrid">
+      <button class="doc-btn" onclick="selectDoc(this,'마감정산서')">
+        <span class="doc-emoji">📊</span>
+        <span class="doc-name">마감정산서</span>
+        <span class="doc-desc">일일 매출 정산</span>
+        <span class="doc-check">✓</span>
+      </button>
+      <button class="doc-btn" onclick="selectDoc(this,'이영자계좌이체')">
+        <span class="doc-emoji">💸</span>
+        <span class="doc-name">이영자 계좌이체</span>
+        <span class="doc-desc">고기값</span>
+        <span class="doc-check">✓</span>
+      </button>
+      <button class="doc-btn" onclick="selectDoc(this,'태경계좌이체')">
+        <span class="doc-emoji">💸</span>
+        <span class="doc-name">태경 계좌이체</span>
+        <span class="doc-desc">주류비</span>
+        <span class="doc-check">✓</span>
+      </button>
+      <button class="doc-btn" onclick="selectDoc(this,'조남호계좌이체')">
+        <span class="doc-emoji">💸</span>
+        <span class="doc-name">조남호 계좌이체</span>
+        <span class="doc-desc">음료비</span>
+        <span class="doc-check">✓</span>
+      </button>
+      <button class="doc-btn" onclick="selectDoc(this,'미락영수증')">
+        <span class="doc-emoji">🧾</span>
+        <span class="doc-name">미락 영수증</span>
+        <span class="doc-desc">미락 식자재</span>
+        <span class="doc-check">✓</span>
+      </button>
+      <button class="doc-btn" onclick="selectDoc(this,'콩나물영수증')">
+        <span class="doc-emoji">🥬</span>
+        <span class="doc-name">콩나물 영수증</span>
+        <span class="doc-desc">콩나물 구매</span>
+        <span class="doc-check">✓</span>
+      </button>
+      <button class="doc-btn" onclick="selectDoc(this,'태경주류계산서')">
+        <span class="doc-emoji">🍶</span>
+        <span class="doc-name">태경 주류계산서</span>
+        <span class="doc-desc">주류 구매</span>
+        <span class="doc-check">✓</span>
+      </button>
+      <button class="doc-btn" onclick="selectDoc(this,'우진유통음료')">
+        <span class="doc-emoji">🥤</span>
+        <span class="doc-name">우진유통 음료</span>
+        <span class="doc-desc">음료 구매</span>
+        <span class="doc-check">✓</span>
+      </button>
+      <button class="doc-btn" onclick="selectDoc(this,'기타영수증')" style="grid-column:span 2">
+        <span class="doc-emoji">📄</span>
+        <span class="doc-name">기타 영수증</span>
+        <span class="doc-desc">그 외 모든 영수증</span>
+        <span class="doc-check">✓</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">② 사진 선택</div>
+    <div class="photo-area" id="photoArea" onclick="document.getElementById('fileInput').click()">
+      <div class="photo-placeholder">
+        <div class="photo-icon">📷</div>
+        <div class="photo-title">사진을 선택하세요</div>
+        <div class="photo-sub">카메라 촬영 또는 갤러리</div>
+      </div>
+      <img id="preview" alt="">
+    </div>
+    <input type="file" id="fileInput" accept="image/*" capture="environment" onchange="handleFile(this)">
+    <button class="add-btn" id="addBtn" onclick="addToQueue()" disabled>
+      <span>＋ 목록에 추가</span>
+    </button>
+  </div>
+
+  <div class="section" id="queueSection" style="display:none">
+    <div class="section-label">③ 업로드 목록</div>
+    <div class="queue-list" id="queueList"></div>
+  </div>
+
+  <button class="submit-btn" id="submitBtn" onclick="submitAll()" disabled>
+    모두 제출하기
+  </button>
+
+</div>
+
+<div class="result-overlay" id="resultOverlay">
+  <div class="result-icon" id="resultIcon"></div>
+  <div class="result-title" id="resultTitle"></div>
+  <div class="result-sub" id="resultSub"></div>
+  <button class="result-btn" onclick="location.reload()">확인</button>
+</div>
+
+<script>
+const GAS_URL = "https://script.google.com/macros/s/AKfycbxvvTbp_Wf-zvQ6e17dE2vKsaXdSSTV9vv5RUSPrTc44IxzNPfFJIgQEs944MEYY1WN/exec";
+const STORE   = "원당점";
+
+var _docType = "", _b64 = "", _mime = "", _fname = "";
+var _queue   = [];
+var _running = false;
+
+window.addEventListener('load', function() {
+  setTimeout(function() {
+    document.getElementById('splash').classList.add('hide');
+    setTimeout(function() { document.getElementById('splash').style.display = 'none'; }, 400);
+  }, 1200);
+});
+
+function selectDoc(btn, type) {
+  document.querySelectorAll('.doc-btn').forEach(function(b) { b.classList.remove('sel'); });
+  btn.classList.add('sel');
+  _docType = type;
+  checkReady();
+}
+
+function handleFile(inp) {
+  if (!inp.files || !inp.files[0]) return;
+  var f = inp.files[0];
+  _fname = f.name; _mime = "image/jpeg";
+  document.querySelector('.photo-placeholder .photo-title').textContent = "압축 중...";
+  var r = new FileReader();
+  r.onload = function(e) {
+    var img = new Image();
+    img.onload = function() {
+      var MAX = 1600, w = img.width, h = img.height;
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+        else { w = Math.round(w * MAX / h); h = MAX; }
+      }
+      var canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      var dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      _b64 = dataUrl.split(',')[1];
+      document.getElementById('preview').src = dataUrl;
+      document.getElementById('photoArea').classList.add('has');
+      checkReady();
+    };
+    img.src = e.target.result;
+  };
+  r.readAsDataURL(f);
+}
+
+function checkReady() {
+  document.getElementById('addBtn').disabled = !(_docType && _b64) || _running;
+}
+
+function addToQueue() {
+  if (!_docType || !_b64) return;
+  _queue.push({ docType: _docType, b64: _b64, mime: _mime, fname: _fname, status: '대기' });
+  renderQueue();
+  _b64 = ''; _fname = '';
+  document.getElementById('photoArea').classList.remove('has');
+  document.getElementById('preview').src = '';
+  document.querySelector('.photo-placeholder .photo-title').textContent = '사진을 선택하세요';
+  document.getElementById('fileInput').value = '';
+  document.getElementById('addBtn').disabled = true;
+  document.getElementById('submitBtn').disabled = false;
+}
+
+function renderQueue() {
+  var section = document.getElementById('queueSection');
+  var list    = document.getElementById('queueList');
+  var badge   = document.getElementById('queueBadge');
+  section.style.display = _queue.length ? 'block' : 'none';
+  badge.textContent = _queue.length;
+  badge.classList.toggle('show', _queue.length > 0);
+  var icons = { '대기':'🕐', '업로드중':'⏳', '완료':'✅', '오류':'❌' };
+  list.innerHTML = _queue.map(function(item, i) {
+    return '<div class="queue-item"><div class="qi-num">' + (i+1) + '</div>' +
+           '<div class="qi-info"><div class="qi-type">' + item.docType + '</div>' +
+           '<div class="qi-file">' + (item.fname || '파일') + '</div></div>' +
+           '<div class="qi-status">' + (icons[item.status] || '🕐') + '</div></div>';
+  }).join('');
+}
+
+function submitAll() {
+  var pending = _queue.filter(function(q) { return q.status === '대기'; });
+  if (!pending.length) return;
+  _running = true;
+  document.getElementById('addBtn').disabled = true;
+  document.getElementById('submitBtn').disabled = true;
+  document.getElementById('submitBtn').innerHTML = '<span class="loader"></span> 업로드 중...';
+  document.getElementById('progressBar').classList.add('show');
+  processNext(0);
+}
+
+function processNext(idx) {
+  while (idx < _queue.length && _queue[idx].status !== '대기') idx++;
+  if (idx >= _queue.length) {
+    _running = false;
+    var done = _queue.filter(function(q) { return q.status === '완료'; }).length;
+    var err  = _queue.filter(function(q) { return q.status === '오류'; }).length;
+    document.getElementById('progressFill').style.width = '100%';
+    setTimeout(function() {
+      showResult(
+        err === 0 ? '✅' : '⚠️',
+        err === 0 ? '모두 완료!' : '일부 오류',
+        done + '개 저장 완료' + (err > 0 ? '\n' + err + '개 오류 발생' : '') + '\n새벽 2시에 자동 분류됩니다.'
+      );
+    }, 500);
+    return;
+  }
+  var item = _queue[idx];
+  item.status = '업로드중';
+  renderQueue();
+  document.getElementById('progressFill').style.width = Math.round((idx / _queue.length) * 100) + '%';
+
+  fetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify({
+      action: 'upload',
+      base64Data: item.b64,
+      mimeType: item.mime,
+      docType: item.docType,
+      storeName: STORE,
+      originalFileName: item.fname
+    }),
+    headers: { 'Content-Type': 'application/json' },
+    mode: 'no-cors'
+  }).then(function() {
+    item.status = '완료'; renderQueue();
+    setTimeout(function() { processNext(idx + 1); }, 300);
+  }).catch(function() {
+    item.status = '오류'; renderQueue();
+    setTimeout(function() { processNext(idx + 1); }, 300);
+  });
+}
+
+function showResult(icon, title, sub) {
+  document.getElementById('resultIcon').textContent  = icon;
+  document.getElementById('resultTitle').textContent = title;
+  document.getElementById('resultSub').textContent   = sub;
+  document.getElementById('resultOverlay').classList.add('show');
+}
+</script>
 </body>
 </html>
