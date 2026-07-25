@@ -86,7 +86,7 @@ body{font-family:-apple-system,"Helvetica Neue",sans-serif;background:var(--bg);
   <div class="ph-sub" id="phSub">카메라 촬영 또는 갤러리에서 선택</div>
   <img id="preview">
 </div>
-<input type="file" id="fileInput" accept="image/*" onchange="handleFile(this)">
+<input type="file" id="fileInput" accept="image/*" multiple onchange="handleFile(this)">
 <button id="addBtn" class="add-btn" onclick="addToQueue()" disabled>+ 목록에 추가</button>
 
 <div class="queue-wrap" id="queueWrap" style="display:none">
@@ -110,7 +110,8 @@ function sel(btn,type){
 }
 function chk(){document.getElementById("addBtn").disabled=!(_docType&&_b64)||_running;}
 function handleFile(inp){
-  if(!inp.files||!inp.files[0])return;
+  if(!inp.files||!inp.files.length)return;
+  if(inp.files.length>1){handleMultiFiles(inp);return;}
   var f=inp.files[0];_fname=f.name;_mime="image/jpeg";
   document.getElementById("phTxt").textContent="압축 중...";
   var r=new FileReader();
@@ -132,6 +133,43 @@ function handleFile(inp){
       chk();
     };img.src=e.target.result;
   };r.readAsDataURL(f);
+}
+function handleMultiFiles(inp){
+  if(!_docType){
+    alert("여러 장을 한번에 올리려면 먼저 ① 문서 유형을 선택해주세요.");
+    inp.value="";
+    return;
+  }
+  var files=Array.prototype.slice.call(inp.files);
+  var total=files.length,loaded=0;
+  document.getElementById("photoBox").classList.add("has");
+  document.getElementById("phTxt").textContent="사진 "+total+"장 처리 중...";
+  document.getElementById("phSub").textContent="0/"+total;
+  files.forEach(function(f){
+    var r=new FileReader();
+    r.onload=function(e){
+      var img=new Image();
+      img.onload=function(){
+        var MAX=1600,w=img.width,h=img.height;
+        if(w>MAX||h>MAX){if(w>h){h=Math.round(h*MAX/w);w=MAX;}else{w=Math.round(w*MAX/h);h=MAX;}}
+        var c=document.createElement("canvas");c.width=w;c.height=h;
+        c.getContext("2d").drawImage(img,0,0,w,h);
+        var url=c.toDataURL("image/jpeg",0.85);
+        var b64=url.split(",")[1];
+        _queue.push({docType:_docType,b64:b64,mime:"image/jpeg",fname:f.name,status:"대기"});
+        loaded++;
+        document.getElementById("phSub").textContent=loaded+"/"+total;
+        renderQueue();
+        document.getElementById("submitBtn").disabled=false;
+        if(loaded===total){
+          document.getElementById("phTxt").textContent="여기를 눌러 사진 선택";
+          document.getElementById("phSub").textContent="카메라 촬영 또는 갤러리에서 선택";
+          document.getElementById("photoBox").classList.remove("has");
+          inp.value="";
+        }
+      };img.src=e.target.result;
+    };r.readAsDataURL(f);
+  });
 }
 function addToQueue(){
   if(!_docType||!_b64)return;
