@@ -86,7 +86,7 @@ body{font-family:-apple-system,"Helvetica Neue",sans-serif;background:var(--bg);
   <div class="ph-sub" id="phSub">카메라 촬영 또는 갤러리에서 선택</div>
   <img id="preview">
 </div>
-<input type="file" id="fileInput" accept="image/*" capture="environment" onchange="handleFile(this)">
+<input type="file" id="fileInput" accept="image/*" onchange="handleFile(this)">
 <button id="addBtn" class="add-btn" onclick="addToQueue()" disabled>+ 목록에 추가</button>
 
 <div class="queue-wrap" id="queueWrap" style="display:none">
