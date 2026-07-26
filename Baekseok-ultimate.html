@@ -611,7 +611,7 @@
       DATA_RANGE: { start: 13, end: 46 } // B13 ~ C46
     };
     
-    const APP_STATE = { password: null, currentYear: 2026, currentMonth: 4, data: null, prevData: null };
+    const APP_STATE = { password: null, currentYear: new Date().getFullYear(), currentMonth: new Date().getMonth() + 1, data: null, prevData: null };
     
     const ICONS = {
       revenue: '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>',
@@ -697,10 +697,10 @@
       const mp = document.getElementById('monthPicker');
       
       for (let y = 2025; y <= 2027; y++) { 
-        yp.innerHTML += `<option value="${y}" ${y === 2026 ? 'selected' : ''}>${y}년</option>`; 
+        yp.innerHTML += `<option value="${y}" ${y === new Date().getFullYear() ? 'selected' : ''}>${y}년</option>`; 
       }
       for (let m = 1; m <= 12; m++) { 
-        mp.innerHTML += `<option value="${m}" ${m === 4 ? 'selected' : ''}>${m}월</option>`; 
+        mp.innerHTML += `<option value="${m}" ${m === new Date().getMonth() + 1 ? 'selected' : ''}>${m}월</option>`; 
       }
       
       yp.onchange = (e) => { APP_STATE.currentYear = parseInt(e.target.value); loadAllData(); };
