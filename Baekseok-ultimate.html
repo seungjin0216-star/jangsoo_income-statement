@@ -569,6 +569,7 @@
       const savedGoalMan = parseInt(localStorage.getItem(goalKey)) || 0;
       const savedGoal = savedGoalMan * 10000;
       const revenue = d.revenue.total || 0;
+      const net = d.netProfit || 0;
 
       // 목표 달성률 (매출 기준)
       const ach = savedGoal > 0 ? Math.round(revenue / savedGoal * 100) : 0;
