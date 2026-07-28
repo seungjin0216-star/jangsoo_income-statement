@@ -98,7 +98,7 @@
     .traffic-target { font-size:10px; color:#6b7280; margin-top:1px; }
 
     /* ── 목표 & 예상 마감 ── */
-    .forecast-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+    .forecast-grid { display:grid; grid-template-columns:2fr 3fr; gap:8px; }
     .forecast-card { background:#2d3238; border-radius:12px; padding:14px; }
     .forecast-title { font-size:11px; color:#8b8b8b; font-weight:700; margin-bottom:10px; letter-spacing:0.3px; }
     .goal-input-row { display:flex; gap:6px; margin-bottom:8px; }
@@ -539,10 +539,10 @@
     function renderTrafficLights(d) {
       const rev = d.revenue.total || 1;
       const items = [
-        { name: '매출원가', val: d.cogs.total, good: 50, warn: 60 },
-        { name: '고기값',   val: d.cogs.items['육류원가'].items['고기값'], good: 35, warn: 42 },
+        { name: '매출원가', val: d.cogs.total, good: 40, warn: 50 },
+        { name: '고기값',   val: d.cogs.items['육류원가'].items['고기값'], good: 25, warn: 32 },
         { name: '임대료',   val: d.rent, good: 8, warn: 12 },
-        { name: '인건비',   val: d.laborCost.total, good: 28, warn: 35 }
+        { name: '인건비',   val: d.laborCost.total, good: 25, warn: 30 }
       ];
       document.getElementById('trafficGrid').innerHTML = items.map(item => {
         const pct = (item.val / rev * 100);
@@ -566,22 +566,23 @@
       const daysInMonth = new Date(year, month, 0).getDate();
       const latestDay = d.lastUpdatedDay || 1;
       const goalKey = `baekseok_goal_${year}_${month}`;
-      const savedGoal = parseInt(localStorage.getItem(goalKey)) || 0;
-      const net = d.netProfit || 0;
+      const savedGoalMan = parseInt(localStorage.getItem(goalKey)) || 0;
+      const savedGoal = savedGoalMan * 10000;
+      const revenue = d.revenue.total || 0;
 
-      // 목표 달성률
-      const ach = savedGoal > 0 ? Math.round(net / savedGoal * 100) : 0;
+      // 목표 달성률 (매출 기준)
+      const ach = savedGoal > 0 ? Math.round(revenue / savedGoal * 100) : 0;
       const barColor = ach >= 100 ? '#4ade80' : ach >= 70 ? '#fbbf24' : '#f87171';
       document.getElementById('goalSection').innerHTML = `
         <div class="goal-input-row">
-          <input type="number" id="goalInput" class="goal-input" placeholder="목표 이익(원)" value="${savedGoal > 0 ? savedGoal : ''}" inputmode="numeric">
+          <input type="number" id="goalInput" class="goal-input" placeholder="목표매출(만원)" value="${savedGoalMan > 0 ? savedGoalMan : ''}" inputmode="numeric">
           <button onclick="saveGoal()" class="goal-btn">저장</button>
         </div>
         ${savedGoal > 0 ? `
           <div class="goal-pct">${ach}<span style="font-size:12px;font-weight:600;color:#8b8b8b;">%</span></div>
           <div class="goal-bar-wrap"><div class="goal-bar" style="width:${Math.min(ach, 100)}%;background:${barColor};"></div></div>
-          <div class="goal-detail">${formatCurrency(net)} / ${formatCurrency(savedGoal)}</div>
-        ` : '<div class="goal-hint">목표 이익을 입력하세요</div>'}
+          <div class="goal-detail">${fmt만(revenue)} / ${savedGoalMan.toLocaleString()}만원</div>
+        ` : '<div class="goal-hint">목표 매출을 입력하세요</div>'}
       `;
 
       // 예상 마감
