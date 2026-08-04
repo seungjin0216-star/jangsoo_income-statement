@@ -11,8 +11,41 @@
 // ============================================================
 // ⚙️ 설정
 // ============================================================
-const GEMINI_API_KEY = "AIzaSyALfPbDBZpPTO9xncZorKh0dTWoApKkDrg";
+// ⚠️ API 키는 코드에 직접 쓰지 않습니다.
+//    GAS 편집기 좌측 [프로젝트 설정] > [스크립트 속성]에
+//    속성 이름 GEMINI_API_KEY / 값 = 발급받은 키  를 추가하세요.
+//    이렇게 하면 코드를 공유하거나 백업해도 키가 노출되지 않습니다.
+const GEMINI_API_KEY = PropertiesService.getScriptProperties().getProperty("GEMINI_API_KEY");
 const GEMINI_MODEL   = "gemini-2.5-flash";
+
+/** 스크립트 속성에 키가 없으면 즉시 알려준다 (조용히 실패하는 것을 막기 위함) */
+function assertApiKey_() {
+  if (!GEMINI_API_KEY) {
+    throw new Error(
+      "GEMINI_API_KEY가 설정되지 않았습니다.\n" +
+      "GAS 편집기 > 프로젝트 설정 > 스크립트 속성에서 " +
+      "GEMINI_API_KEY 를 추가해주세요."
+    );
+  }
+  return GEMINI_API_KEY;
+}
+
+/** 설정이 제대로 됐는지 확인용 — 편집기에서 이 함수만 실행해보세요 */
+function checkApiKey() {
+  var key = PropertiesService.getScriptProperties().getProperty("GEMINI_API_KEY");
+  if (!key) {
+    Logger.log("❌ 스크립트 속성에 GEMINI_API_KEY가 없습니다.");
+    return;
+  }
+  Logger.log("✅ 키 등록됨 (길이 " + key.length + "자, 앞 6자 " + key.substring(0, 6) + ")");
+  var res = UrlFetchApp.fetch(
+    "https://generativelanguage.googleapis.com/v1beta/models?key=" + key,
+    { muteHttpExceptions: true }
+  );
+  Logger.log(res.getResponseCode() === 200
+    ? "✅ Gemini API 연결 정상"
+    : "❌ Gemini 응답 " + res.getResponseCode() + " : " + res.getContentText().substring(0, 200));
+}
 
 const BRANCH_CONFIG = {
   "원당점": {
@@ -85,8 +118,9 @@ var PROMPTS = {
     "- 간편결제(카카오페이/네이버페이/페이코 등) → 분류: \"카드매출\", 항목명: \"간편결제\"\n" +
     "- 배달앱(배민/쿠팡이츠/요기요 등) 금액이 있으면 → 분류: \"배달매출\"\n\n" +
     "절대 출력하지 말 것:\n" +
-    "- '매출 합계', '총 합계', '합계' 등 합산 행\n" +
-    "- 위 5가지 분류 외 모든 항목\n" +
+    "- '결제합계', '매출 합계', '총 합계', '합계' 등 합산·소계 행\n" +
+    "- 결제합계는 현금매출+카드매출의 단순 합산이므로 반드시 제외\n" +
+    "- 위 4가지 분류(현금매출·카드매출·배달매출) 외 모든 항목\n" +
     "- 금액이 0이거나 없는 항목\n\n" +
     "응답 형식 (예시):\n" +
     "[{\"날짜\":\"YYYY-MM-DD\",\"분류\":\"현금매출\",\"항목명\":\"일반현금+현금영수증\",\"금액\":숫자}," +
@@ -123,7 +157,11 @@ var PROMPTS = {
 
   미락:
     "이것은 미락(식자재) 영수증입니다.\n" +
-    "거래 날짜(YYYY-MM-DD)와 공급가액 또는 합계 금액을 추출하여 순수 JSON 배열만 응답하세요:\n" +
+    "거래 날짜(YYYY-MM-DD)와 이번 거래의 공급가액(당회 납부 금액)을 추출하여 순수 JSON 배열만 응답하세요.\n\n" +
+    "주의사항:\n" +
+    "- '미수금'은 누적 외상잔금이므로 절대 추출하지 말 것\n" +
+    "- '공급가액' 또는 '이번 거래 합계'만 추출\n" +
+    "- 공급가액이 없으면 '합계금액' 사용\n\n" +
     "[{\"날짜\":\"YYYY-MM-DD\",\"분류\":\"미락\",\"항목명\":\"미락 식자재\",\"금액\":숫자}]",
 
   콩나물:
@@ -399,6 +437,36 @@ function processFiles(branchName) {
   }
 
   Logger.log("✅ 성공: " + processed + " | ⏭ 스킵: " + skipped + " | ❌ 오류: " + errors);
+}
+
+
+// ============================================================
+// 🔄 AI분석실패 파일 재처리 (수동 1회 실행)
+// GAS 편집기에서 retryFailedFiles() 직접 실행
+// ============================================================
+
+function retryFailedFiles() {
+  var total = 0;
+  ["원당점", "백석점"].forEach(function(branchName) {
+    var config = BRANCH_CONFIG[branchName];
+    var folder = DriveApp.getFolderById(config.folderId);
+    var files  = folder.getFiles();
+    var count  = 0;
+    while (files.hasNext()) {
+      var file = files.next();
+      var name = file.getName().trim();
+      // "[확인요망] AI분석실패_" 로 시작하는 파일만 복원
+      if (name.startsWith("[확인요망] AI분석실패_")) {
+        var original = name.replace("[확인요망] AI분석실패_", "");
+        safeRename(file, original);
+        Logger.log("[" + branchName + "] 복원: " + original);
+        count++;
+      }
+    }
+    Logger.log("[" + branchName + "] 재처리 대상 복원: " + count + "건");
+    total += count;
+  });
+  Logger.log("✅ 총 " + total + "건 복원 완료 → 다음 자동실행(새벽 4시)에 재분석됩니다.");
 }
 
 
