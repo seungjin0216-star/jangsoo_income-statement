@@ -18,6 +18,17 @@
 const GEMINI_API_KEY = PropertiesService.getScriptProperties().getProperty("GEMINI_API_KEY");
 const GEMINI_MODEL   = "gemini-2.5-flash";
 
+const TIMEZONE = 'Asia/Seoul';
+
+// ── 월별 시트의 기준일 셀 ──
+// 이 칸의 날짜가 "이 시트가 다루는 달"을 결정한다.
+// 시트 안의 수식 475개가 $B$7 을 참조하므로 위치를 옮기지 않는다.
+//   B7  = 그 달의 1일
+//   A51 = EOMONTH(B7,0)      그 달 말일
+//   A52 = MIN(A51, TODAY())  말일과 오늘 중 이른 날
+//   F6, G11:AK11 등 = DAY(EOMONTH($B$7,0)) 로 그 달의 일수를 구함
+const BASE_DATE_CELL = 'B7';
+
 /** 스크립트 속성에 키가 없으면 즉시 알려준다 (조용히 실패하는 것을 막기 위함) */
 function assertApiKey_() {
   if (!GEMINI_API_KEY) {
@@ -64,13 +75,289 @@ const SHEET_HEADERS = ["날짜", "분류", "항목명", "금액", "지점", "원
 const COL_FILE_ID   = 8;
 
 
+// ════════════════════════════════════════════════════════════
+// 👔 직원 급여 관리 (알바계산기 앱의 「직원」 탭이 여기를 부른다)
+//
+//  왜 여기에 있나
+//    알바 데이터는 알바계산기 백엔드(별도 스프레드시트)에 있다.
+//    직원을 거기 끼워넣으면 알바 계산 로직·세금(3.3%)·근무표와 엉킨다.
+//    그래서 저장소를 물리적으로 분리했다. 직원 코드에 문제가 생겨도
+//    알바 데이터는 다른 스프레드시트에 있어서 영향을 받을 수 없다.
+//
+//  알바와의 차이
+//    알바 : 시급 × 근무시간 + 주휴수당  → 매달 계산이 필요
+//    직원 : 월급 고정                   → 한 번 등록하면 끝
+//
+//  분류를 나눈 이유
+//    알바급여 → '인건비'    (기존 그대로. 손익계산서 29행)
+//    직원급여 → '직원급여'  (신규.      손익계산서 28행)
+//    같은 분류를 쓰면 28행과 29행이 같은 값을 읽어 인건비가 2배가 된다.
+//
+//  저장 위치 — 백석점 손익계산서 스프레드시트
+//    직원명부 : id | 이름 | 지점 | 월급 | 시작연월 | 종료연월 | 메모
+//    직원지급 : id | 직원id | 연월 | 금액 | 지급일
+// ════════════════════════════════════════════════════════════
+
+var STAFF_SS_ID    = BRANCH_CONFIG['백석점'].ssId;   // 직원 데이터가 모여 사는 곳
+var STAFF_TAB      = '직원명부';
+var STAFF_PAY_TAB  = '직원지급';
+var STAFF_CATEGORY = '직원급여';                      // 지출및매출로그 분류
+
+var STAFF_HEADERS     = ['id', '이름', '지점', '월급', '시작연월', '종료연월', '메모'];
+var STAFF_PAY_HEADERS = ['id', '직원id', '연월', '금액', '지급일'];
+
+function staffRouter_(data) {
+  try {
+    switch (data.action) {
+      case 'staffList'  : return jsonOut_({ ok: true, data: staffList_() });
+      case 'staffSave'  : return jsonOut_(staffSave_(data.staff));
+      case 'staffPay'   : return jsonOut_(staffPay_(data.id, data.ym));
+      case 'staffUnpay' : return jsonOut_(staffUnpay_(data.id, data.ym));
+      default:
+        return jsonOut_({ ok: false, error: '알 수 없는 action: ' + data.action });
+    }
+  } catch (err) {
+    Logger.log('❌ 직원 API 오류: ' + err.message);
+    return jsonOut_({ ok: false, error: err.message });
+  }
+}
+
+function jsonOut_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+                       .setMimeType(ContentService.MimeType.JSON);
+}
+
+/** 탭이 없으면 헤더와 함께 만든다 */
+function staffSheet_(name, headers) {
+  var ss = SpreadsheetApp.openById(STAFF_SS_ID);
+  var sh = ss.getSheetByName(name);
+  if (!sh) {
+    sh = ss.insertSheet(name);
+    sh.appendRow(headers);
+    sh.getRange(1, 1, 1, headers.length).setFontWeight('bold').setBackground('#e0e7ff');
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+/** 시트를 객체 배열로 읽는다 */
+function staffRows_(sh, headers) {
+  var last = sh.getLastRow();
+  if (last < 2) return [];
+  var vals = sh.getRange(2, 1, last - 1, headers.length).getValues();
+  return vals.filter(function (r) { return String(r[0]).trim() !== ''; })
+             .map(function (r) {
+               var o = {};
+               headers.forEach(function (h, i) { o[h] = r[i]; });
+               return o;
+             });
+}
+
+function staffList_() {
+  var staff = staffRows_(staffSheet_(STAFF_TAB, STAFF_HEADERS), STAFF_HEADERS);
+  var pays  = staffRows_(staffSheet_(STAFF_PAY_TAB, STAFF_PAY_HEADERS), STAFF_PAY_HEADERS);
+
+  // 날짜 객체는 JSON 으로 나가면 UTC 로 밀리므로 문자열로 고정한다
+  pays.forEach(function (p) {
+    if (p['지급일'] instanceof Date) {
+      p['지급일'] = Utilities.formatDate(p['지급일'], TIMEZONE, 'yyyy-MM-dd');
+    }
+  });
+  return { staff: staff, payments: pays };
+}
+
+/**
+ * 직원 등록 / 수정 / 퇴사 처리
+ *   id 가 없으면 신규, 있으면 해당 행을 덮어쓴다.
+ *   퇴사는 삭제가 아니라 종료연월 기입이다 → 지난 급여 기록이 남는다.
+ */
+function staffSave_(staff) {
+  if (!staff || !String(staff['이름'] || '').trim()) {
+    return { ok: false, error: '이름이 비어 있습니다.' };
+  }
+  var 월급 = Number(staff['월급']) || 0;
+  if (월급 <= 0) return { ok: false, error: '월급을 입력하세요.' };
+
+  var sh   = staffSheet_(STAFF_TAB, STAFF_HEADERS);
+  var rows = staffRows_(sh, STAFF_HEADERS);
+
+  var row = [
+    staff['id'] || ('S' + new Date().getTime()),
+    String(staff['이름']).trim(),
+    staff['지점']     || '백석점',
+    월급,
+    staff['시작연월'] || Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM'),
+    staff['종료연월'] || '',
+    staff['메모']     || '',
+  ];
+
+  var idx = -1;
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i]['id']) === String(row[0])) { idx = i; break; }
+  }
+
+  if (idx >= 0) sh.getRange(idx + 2, 1, 1, STAFF_HEADERS.length).setValues([row]);
+  else          sh.appendRow(row);
+
+  SpreadsheetApp.flush();
+  Logger.log('👔 직원 저장: ' + row[1] + ' / ' + Number(row[3]).toLocaleString() + '원');
+  return { ok: true, id: row[0] };
+}
+
+/**
+ * 지급완료 → 지출및매출로그에 기록
+ *   marker 로 중복을 막으므로 여러 번 눌러도 행이 늘어나지 않는다.
+ *   날짜는 그 달 1일. 알바급여와 같은 규칙이라 월별탭 수식이 그대로 잡는다.
+ */
+function staffPay_(id, ym) {
+  if (!id || !ym) return { ok: false, error: 'id 와 연월이 필요합니다.' };
+
+  var staff = staffRows_(staffSheet_(STAFF_TAB, STAFF_HEADERS), STAFF_HEADERS);
+  var s = null;
+  for (var i = 0; i < staff.length; i++) {
+    if (String(staff[i]['id']) === String(id)) { s = staff[i]; break; }
+  }
+  if (!s) return { ok: false, error: '직원을 찾지 못했습니다.' };
+
+  // 재직 기간 밖이면 막는다 (퇴사자에게 실수로 지급하는 것 방지)
+  var 시작 = String(s['시작연월'] || '');
+  var 종료 = String(s['종료연월'] || '');
+  if (시작 && ym < 시작) return { ok: false, error: ym + ' 은 입사(' + 시작 + ') 전입니다.' };
+  if (종료 && ym > 종료) return { ok: false, error: ym + ' 은 퇴사(' + 종료 + ') 후입니다.' };
+
+  var 금액 = Number(s['월급']) || 0;
+
+  // ① 지급 이력 기록 (같은 직원·같은 달이면 덮어쓴다)
+  var paySh  = staffSheet_(STAFF_PAY_TAB, STAFF_PAY_HEADERS);
+  var pays   = staffRows_(paySh, STAFF_PAY_HEADERS);
+  var payRow = [id + '_' + ym, id, ym, 금액,
+                Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd')];
+  var pIdx = -1;
+  for (var j = 0; j < pays.length; j++) {
+    if (String(pays[j]['id']) === payRow[0]) { pIdx = j; break; }
+  }
+  if (pIdx >= 0) paySh.getRange(pIdx + 2, 1, 1, STAFF_PAY_HEADERS.length).setValues([payRow]);
+  else           paySh.appendRow(payRow);
+
+  // ② 해당 지점 손익계산서에 합계로 기록
+  var branchName = s['지점'] || '백석점';
+  syncStaffCosts(branchName, ym);
+
+  SpreadsheetApp.flush();
+  return { ok: true, 금액: 금액 };
+}
+
+/** 지급 취소 */
+function staffUnpay_(id, ym) {
+  var paySh = staffSheet_(STAFF_PAY_TAB, STAFF_PAY_HEADERS);
+  var pays  = staffRows_(paySh, STAFF_PAY_HEADERS);
+  var key   = id + '_' + ym;
+
+  var branchName = '백석점';
+  var staff = staffRows_(staffSheet_(STAFF_TAB, STAFF_HEADERS), STAFF_HEADERS);
+  for (var k = 0; k < staff.length; k++) {
+    if (String(staff[k]['id']) === String(id)) { branchName = staff[k]['지점'] || '백석점'; break; }
+  }
+
+  for (var i = 0; i < pays.length; i++) {
+    if (String(pays[i]['id']) === key) { paySh.deleteRow(i + 2); break; }
+  }
+
+  syncStaffCosts(branchName, ym);   // 남은 인원으로 합계 다시 계산
+  SpreadsheetApp.flush();
+  return { ok: true };
+}
+
+/**
+ * 그 달 · 그 지점의 직원급여 합계를 지출및매출로그에 반영
+ *   지급 취소로 0원이 되면 기존 행을 지운다
+ *   (upsertLogEntry 는 amount<=0 이면 아무것도 안 하므로 직접 처리)
+ */
+function syncStaffCosts(branchName, ym) {
+  var config = BRANCH_CONFIG[branchName];
+  if (!config) { Logger.log('알 수 없는 지점: ' + branchName); return; }
+
+  var staff = staffRows_(staffSheet_(STAFF_TAB, STAFF_HEADERS), STAFF_HEADERS);
+  var pays  = staffRows_(staffSheet_(STAFF_PAY_TAB, STAFF_PAY_HEADERS), STAFF_PAY_HEADERS);
+
+  var ids = {};
+  staff.forEach(function (s) {
+    if ((s['지점'] || '백석점') === branchName) ids[String(s['id'])] = true;
+  });
+
+  var total = 0;
+  pays.forEach(function (p) {
+    if (String(p['연월']) === ym && ids[String(p['직원id'])]) total += Number(p['금액']) || 0;
+  });
+
+  var ss       = SpreadsheetApp.openById(config.ssId);
+  var logSheet = ss.getSheetByName('지출및매출로그') || ss.insertSheet('지출및매출로그');
+  ensureHeaders(logSheet);
+
+  var marker = '[자동]직원급여_' + branchName + '_' + ym;
+
+  if (total > 0) {
+    upsertLogEntry(logSheet, ym + '-01', STAFF_CATEGORY,
+                   branchName + ' ' + ym + ' 직원급여', total, branchName, marker);
+    Logger.log('👔 [' + branchName + '] ' + ym + ' 직원급여 ' + total.toLocaleString() + '원');
+  } else {
+    var last = logSheet.getLastRow();
+    if (last > 1) {
+      var col = logSheet.getRange(2, 6, last - 1, 1).getValues();
+      for (var i = col.length - 1; i >= 0; i--) {
+        if (String(col[i][0]).trim() === marker) { logSheet.deleteRow(i + 2); break; }
+      }
+    }
+    Logger.log('👔 [' + branchName + '] ' + ym + ' 직원급여 0원 → 기록 삭제');
+  }
+}
+
+/** 진단 — 직원 데이터가 제대로 들어갔는지 확인 */
+function checkStaff() {
+  var d = staffList_();
+  Logger.log('═══ 직원명부 (' + d.staff.length + '명) ═══');
+  d.staff.forEach(function (s) {
+    Logger.log('  ' + s['이름'] + ' | ' + s['지점'] + ' | ' +
+               Number(s['월급']).toLocaleString() + '원 | ' +
+               s['시작연월'] + ' ~ ' + (s['종료연월'] || '재직중'));
+  });
+  Logger.log('\n═══ 지급 이력 (' + d.payments.length + '건) ═══');
+  d.payments.forEach(function (p) {
+    Logger.log('  ' + p['연월'] + ' | ' + p['직원id'] + ' | ' +
+               Number(p['금액']).toLocaleString() + '원');
+  });
+}
+
+
 // ============================================================
 // 📡 웹앱 수신 (앱 → GAS → 드라이브 저장)  ← 핵심!
 // ============================================================
 
+/**
+ * 알바계산기 앱의 직원 탭이 데이터를 읽어가는 통로
+ *   GET .../exec?action=staffList
+ */
+function doGet(e) {
+  var action = (e && e.parameter && e.parameter.action) || '';
+  if (action === 'staffList') {
+    try {
+      return jsonOut_({ ok: true, data: staffList_() });
+    } catch (err) {
+      return jsonOut_({ ok: false, error: err.message });
+    }
+  }
+  return jsonOut_({ ok: true, message: '장수한우곱창 손익계산서 API' });
+}
+
 function doPost(e) {
   try {
     var data    = JSON.parse(e.postData.contents);
+
+    // ── 직원 관리 요청 라우팅 ──────────────────────────────
+    // 기존 영수증 앱은 action 없이 보내므로 아래 분기를 타지 않는다.
+    // 즉 이 코드를 추가해도 영수증 업로드는 지금과 똑같이 동작한다.
+    if (data.action) return staffRouter_(data);
+
     var base64  = data.base64;
     var mime    = data.mime    || "image/jpeg";
     var docType = data.docType || "기타";
@@ -679,8 +966,185 @@ function createMonthlyTab(branchName) {
     Logger.log('  ⚠️ 날짜 헤더 행 없음 — 날짜 수동 확인 필요');
   }
 
+  // ── 기준일(A1) 설정 ──
+  // 시트를 복사하면 기준일이 이전 달로 남아, 이를 참조하는 A51·A52가
+  // 전부 지난 달을 가리키게 된다. 새 달로 다시 세팅한다.
+  setupBaseDate_(newSheet, year, month);
+
   SpreadsheetApp.flush();
   Logger.log('✅ [' + branchName + '] ' + newName + ' 생성 완료');
+}
+
+/**
+ * 기준일 셀(B7:B9)의 연·월을 새 달로 맞춘다.
+ * 일(day)과 시각은 원래 값을 유지하고, 새 달에 없는 날이면 말일로 보정한다.
+ *   예) 7/31 → 8/31,  1/31 → 2/28
+ */
+/**
+ * 기준일을 A1 한 칸으로 통일한다.
+ *
+ * 원래는 B7:B9(병합 셀)에 기준일이 있었는데, 병합이라 값을 넣기가 까다롭고
+ * 실수로 지워지기도 쉬웠다. 그래서 병합되지 않은 A1을 기준으로 옮겼다.
+ *
+ *   A1  = 그 달의 1일          (이 시트가 다루는 달을 나타내는 기준일)
+ *   A51 = EOMONTH($B$7, 0)     그 달의 말일
+ *   A52 = MIN($A$51, TODAY())  말일과 오늘 중 이른 날
+ */
+function setupBaseDate_(sheet, year, month) {
+  var cell = sheet.getRange(BASE_DATE_CELL);
+
+  // B7:B9처럼 병합돼 있으면 값은 좌상단 칸에만 쓸 수 있다.
+  var merged = cell.getMergedRanges();
+  if (merged.length) cell = merged[0].getCell(1, 1);
+
+  var old = toDate_(cell.getValue());
+
+  // 날짜를 Date 객체로 넣으면 스크립트와 시트의 시간대가 다를 때 하루가 밀린다.
+  // (예: 스크립트 한국시간 8/1 00:00 → 시트가 미국시간이면 7/31로 표시)
+  // =DATE(연,월,1) 수식으로 넣으면 시트가 직접 계산하므로 시간대와 무관하다.
+  try {
+    cell.setFormula('=DATE(' + year + ',' + month + ',1)');
+    SpreadsheetApp.flush();
+
+    // 시트가 실제로 어떤 날짜로 계산했는지 확인한다.
+    // 시간대 값이 비어 있는 스프레드시트가 있어 안전하게 대체값을 둔다.
+    var tz = TIMEZONE;
+    try {
+      var sstz = sheet.getParent().getSpreadsheetTimeZone();
+      if (sstz && typeof sstz === 'string') tz = sstz;
+    } catch (e) { /* 시간대를 못 읽으면 기본값 사용 */ }
+
+    var saved = cell.getValue();
+    var savedStr = '(확인 실패)';
+    var shownMonth = null;
+    try {
+      if (saved instanceof Date) {
+        savedStr    = Utilities.formatDate(saved, tz, 'yyyy-MM-dd');
+        shownMonth  = Number(Utilities.formatDate(saved, tz, 'M'));
+      } else {
+        savedStr = JSON.stringify(saved);
+      }
+    } catch (e) {
+      savedStr = String(saved);
+    }
+
+    Logger.log('  기준일 ' + cell.getA1Notation() + ' → ' + savedStr
+      + '   [시간대 ' + tz + ']'
+      + (old ? '' : '  (비어 있던 칸을 채웠습니다)'));
+
+    if (shownMonth !== null && shownMonth !== month) {
+      Logger.log('  ⚠️ 시트에는 ' + shownMonth + '월로 보입니다. B7 셀 서식을 "날짜"로 바꿔보세요.');
+    }
+    return true;
+  } catch (e) {
+    Logger.log('  ⚠️ 기준일 설정 실패: ' + e.message);
+    return false;
+  }
+}
+
+/** 날짜 값 또는 "2026. 7. 31" 같은 문자열을 Date로 바꾼다 */
+function toDate_(v) {
+  if (v instanceof Date && !isNaN(v.getTime())) return v;
+  if (typeof v === 'string' && v.trim()) {
+    var m = v.match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+    if (m) {
+      var hh = 0, mi = 0;
+      var t = v.match(/(\d{1,2}):(\d{2})/);
+      if (t) {
+        hh = parseInt(t[1], 10); mi = parseInt(t[2], 10);
+        if (/오후/.test(v) && hh < 12) hh += 12;
+        if (/오전/.test(v) && hh === 12) hh = 0;
+      }
+      return new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10), hh, mi);
+    }
+  }
+  return null;
+}
+
+/**
+ * 진단용 — B7:B9와 A50:A52에 실제로 무엇이 들어 있는지 확인한다.
+ * GAS 편집기에서 직접 실행하고 [실행 로그]를 확인하세요.
+ */
+function checkBaseDates() {
+  var now = new Date();
+  var name = String(now.getFullYear()).slice(2) + '년 ' + (now.getMonth() + 1) + '월 손익계산서';
+
+  ['백석점', '원당점'].forEach(function (branchName) {
+    var config = BRANCH_CONFIG[branchName];
+    if (!config) return;
+    var ss = SpreadsheetApp.openById(config.ssId);
+    var sh = ss.getSheetByName(name);
+    Logger.log('\n===== [' + branchName + '] ' + name + ' =====');
+    if (!sh) { Logger.log('  시트 없음'); return; }
+
+    // 병합 여부
+    var merges = sh.getRange('A1:C60').getMergedRanges().map(function (r) { return r.getA1Notation(); });
+    Logger.log('  A1:C60 병합된 범위: ' + (merges.length ? merges.join(', ') : '없음'));
+
+    ['B7', 'B8', 'B9', 'A50', 'A51', 'A52'].forEach(function (a1) {
+      var c = sh.getRange(a1);
+      var v = c.getValue();
+      var f = c.getFormula();
+      Logger.log('  ' + a1
+        + ' | 값: ' + (v instanceof Date
+            ? Utilities.formatDate(v, 'Asia/Seoul', 'yyyy-MM-dd HH:mm') + ' (Date)'
+            : JSON.stringify(v) + ' (' + typeof v + ')')
+        + (f ? ' | 수식: ' + f : ''));
+    });
+  });
+  Logger.log('\n위 내용을 그대로 알려주시면 정확히 맞춰 고칠 수 있습니다.');
+}
+
+/**
+ * 이번 달 시트의 기준일을 A1로 세팅하고 A51·A52 수식을 다시 건다.
+ * 기준일이 지워졌거나 이전 달을 가리킬 때 GAS 편집기에서 직접 실행.
+ */
+function fixBaseDatesForCurrentMonth() {
+  var now = new Date();
+  var name = String(now.getFullYear()).slice(2) + '년 ' + (now.getMonth() + 1) + '월 손익계산서';
+
+  ['백석점', '원당점'].forEach(function (branchName) {
+    var config = BRANCH_CONFIG[branchName];
+    if (!config) return;
+    var ss = SpreadsheetApp.openById(config.ssId);
+    var sh = ss.getSheetByName(name);
+    if (!sh) { Logger.log('[' + branchName + '] ' + name + ' 없음'); return; }
+    Logger.log('\n[' + branchName + '] ' + name);
+    setupBaseDate_(sh, now.getFullYear(), now.getMonth() + 1);
+
+    // A51·A52가 비어 있거나 깨졌으면 되살린다 (평소엔 손대지 않음)
+    var a51 = sh.getRange('A51'), a52 = sh.getRange('A52');
+    if (!a51.getFormula()) { a51.setFormula('=EOMONTH($B$7,0)');   Logger.log('  A51 수식 복구'); }
+    if (!a52.getFormula()) { a52.setFormula('=MIN($A$51,TODAY())'); Logger.log('  A52 수식 복구'); }
+  });
+
+  SpreadsheetApp.flush();
+  Logger.log('\n✅ 완료 — 시트에서 B7(기준일), A51(말일), A52(오늘까지)를 확인하세요.');
+}
+
+/**
+ * 시트 전체에서 특정 셀(예: B7)을 참조하는 수식을 찾아 알려준다.
+ * 기준일을 옮겼을 때 놓친 수식이 없는지 확인용.
+ */
+function findFormulasReferencing_(sheet, ref) {
+  var formulas = sheet.getDataRange().getFormulas();
+  var re = new RegExp('(^|[^A-Z0-9$])\\$?' + ref.replace(/(\d+)/, '\\$?$1') + '([^0-9]|$)');
+  var hits = [];
+  for (var r = 0; r < formulas.length; r++) {
+    for (var c = 0; c < formulas[r].length; c++) {
+      var f = formulas[r][c];
+      if (f && re.test(f)) {
+        hits.push(sheet.getRange(r + 1, c + 1).getA1Notation() + ' : ' + f);
+      }
+    }
+  }
+  if (hits.length) {
+    Logger.log('  ⚠️ 아직 ' + ref + '을 참조하는 수식 ' + hits.length + '개');
+    hits.slice(0, 15).forEach(function (h) { Logger.log('     ' + h); });
+    Logger.log('     (기준일 셀이므로 정상입니다)');
+  } else {
+    Logger.log('  ' + ref + '을 참조하는 수식 없음 ✅');
+  }
 }
 
 // 수동 테스트용 (지금 당장 이번 달 탭 만들고 싶을 때)
@@ -1093,6 +1557,301 @@ function syncLaborCosts(branchName, ym) {
 
   upsertLogEntry(logSheet, ymd, '인건비', branchName + ' ' + ym + ' 급여', totalGross, branchName, marker);
   Logger.log('✅ 인건비 기록 완료: ' + totalGross.toLocaleString() + '원 → ' + marker);
+}
+
+/**
+ * 진단용 — 인건비가 어느 달에 얼마로 기록돼 있는지 확인한다.
+ * GAS 편집기에서 직접 실행하고 [실행 로그]를 보세요.
+ */
+// ═══════════════════════════════════════════════════════════
+// 알바 급여 수식 통일
+//
+//  왜 필요한가
+//    새 월 시트는 "26년 x월 손익계산서" 템플릿을 복사해서 만든다.
+//    그런데 템플릿에는 옛날 수식(=SUM(F59:F63), 시급×근무일수 추정치)이
+//    남아 있어서, 7월에 손으로 고친 수식이 8월에 반영되지 않았다.
+//    템플릿을 안 고치면 매달 같은 문제가 반복된다.
+//
+//  올바른 수식 (7월 기준)
+//    =IF(G$11="", "", SUMIFS('지출및매출로그'!$D:$D,
+//                            '지출및매출로그'!$B:$B, "인건비",
+//                            '지출및매출로그'!$A:$A,
+//                            DATE(YEAR($B$7), MONTH($B$7), SUBSTITUTE(G$11,"일",""))))
+//    급여계산기가 월말 지급액을 "그 달 1일자" 1건으로 보내므로
+//    1일(G열)만 집계하면 그 달 전체 급여가 된다. 일별 분산 불필요.
+//
+//  ※ 백석점 전용이다.
+//    원당 손익계산서는 아직 손대지 않은 상태이고(계정항목도 조금 다름),
+//    백석 양식이 완성되면 통째로 이식할 계획이다.
+//    그때까지 원당을 부분 수정하면 두 양식이 어중간하게 갈라진다.
+//
+//  행 번호는 하드코딩하지 않는다. B열에서 "알바 급여"를 찾는다.
+// ═══════════════════════════════════════════════════════════
+
+var LABOR_FIX_BRANCHES = ['백석점'];   // 원당 이식 시점에 '원당점' 추가
+
+// ═══════════════════════════════════════════════════════════
+// 템플릿 vs 7월 수식 비교 (백석점)
+//
+//  새 달 시트는 "26년 x월 손익계산서" 템플릿을 복사해서 만든다.
+//  7월 시트는 그동안 손으로 고쳐온 반면 템플릿은 방치돼 있었다.
+//  → 템플릿에 빠진 수식은 매달 새로 생기는 시트마다 계속 빠진다.
+//
+//  값(숫자)은 비교하지 않는다. 달마다 다른 게 정상이라 노이즈만 된다.
+//  수식만 본다. 같은 주소끼리 비교하므로 G/H 열 참조 차이는 문제되지 않는다.
+//
+//  56행 아래는 과거 잔재라 보지 않는다 (사장님 확인).
+// ═══════════════════════════════════════════════════════════
+
+function 템플릿비교_백석() {
+  var BRANCH   = '백석점';
+  var TEMPLATE = '26년 x월 손익계산서';
+  var GOOD     = '26년 7월 손익계산서';
+  var LAST_ROW = 55;     // 56행 아래는 과거 데이터 — 무시
+  var LAST_COL = 37;     // A~AK
+  var MAX_LOG  = 80;     // 로그 폭주 방지
+
+  var config = BRANCH_CONFIG[BRANCH];
+  var ss = SpreadsheetApp.openById(config.ssId);
+  var tpl = ss.getSheetByName(TEMPLATE);
+  var good = ss.getSheetByName(GOOD);
+
+  if (!tpl)  { Logger.log('✗ 템플릿 탭 없음: ' + TEMPLATE); return; }
+  if (!good) { Logger.log('✗ 기준 탭 없음: ' + GOOD); return; }
+
+  var fT = tpl.getRange(1, 1, LAST_ROW, LAST_COL).getFormulas();
+  var fG = good.getRange(1, 1, LAST_ROW, LAST_COL).getFormulas();
+  var vT = tpl.getRange(1, 1, LAST_ROW, LAST_COL).getDisplayValues();
+  var vG = good.getRange(1, 1, LAST_ROW, LAST_COL).getDisplayValues();
+  var labels = good.getRange(1, 2, LAST_ROW, 1).getDisplayValues();
+
+  var 빠짐 = [], 다름 = [], 잔재 = [];
+
+  for (var r = 0; r < LAST_ROW; r++) {
+    for (var c = 0; c < LAST_COL; c++) {
+      var a = String(fT[r][c] || '').replace(/\s+/g, '');
+      var b = String(fG[r][c] || '').replace(/\s+/g, '');
+      if (a === b) continue;
+
+      var addr = colLetter_(c + 1) + (r + 1);
+      var label = String(labels[r][0] || '').trim();
+      var item = {
+        addr: addr,
+        label: label,
+        tpl: fT[r][c] || ('값:' + (vT[r][c] || '(빈칸)')),
+        good: fG[r][c] || ('값:' + (vG[r][c] || '(빈칸)')),
+      };
+
+      if (!a && b)      빠짐.push(item);   // 템플릿에만 없음 → 매달 빠진다
+      else if (a && !b) 잔재.push(item);   // 7월에서 지운 것
+      else              다름.push(item);   // 둘 다 있는데 내용이 다름
+    }
+  }
+
+  Logger.log('╔═══ [' + BRANCH + '] 템플릿 vs 7월 수식 비교 ═══');
+  Logger.log('║ 범위: A1:' + colLetter_(LAST_COL) + LAST_ROW);
+  Logger.log('║ 🔴 템플릿에 빠진 수식 : ' + 빠짐.length + '개   ← 매달 새 시트마다 빠짐');
+  Logger.log('║ 🟡 수식이 서로 다름   : ' + 다름.length + '개');
+  Logger.log('║ 🔵 7월에서 지운 것    : ' + 잔재.length + '개');
+
+  dumpDiff_('🔴 템플릿에 빠진 수식 (가장 중요)', 빠짐, MAX_LOG);
+  dumpDiff_('🟡 수식이 서로 다름', 다름, MAX_LOG);
+  dumpDiff_('🔵 7월에서 지운 것 (대개 무시해도 됨)', 잔재, 20);
+
+  Logger.log('\n※ 읽기만 했습니다. 아무것도 바꾸지 않았습니다.');
+}
+
+function dumpDiff_(title, list, max) {
+  if (!list.length) return;
+  Logger.log('\n───── ' + title + ' (' + list.length + '개) ─────');
+  for (var i = 0; i < Math.min(list.length, max); i++) {
+    var d = list[i];
+    Logger.log('  ' + d.addr + (d.label ? ' [' + d.label + ']' : ''));
+    Logger.log('     템플릿: ' + String(d.tpl).slice(0, 110));
+    Logger.log('     7월  : ' + String(d.good).slice(0, 110));
+  }
+  if (list.length > max) Logger.log('  ... 외 ' + (list.length - max) + '개 더');
+}
+
+function colLetter_(n) {
+  var s = '';
+  while (n > 0) { var m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = (n - m - 1) / 26; }
+  return s;
+}
+
+/** 1단계 — 무엇이 바뀌는지 보기만 한다. 시트를 건드리지 않는다. */
+function fixLaborFormula_미리보기() { fixLaborFormula_(true); }
+
+/** 2단계 — 실제로 적용한다. 미리보기를 확인한 뒤에 실행할 것. */
+function fixLaborFormula_적용() { fixLaborFormula_(false); }
+
+function fixLaborFormula_(dryRun) {
+  var SRC_TAB  = '26년 7월 손익계산서';                     // 정상본
+  var TARGETS  = ['26년 x월 손익계산서', '26년 8월 손익계산서'];
+  var LABEL    = '알바급여';                                 // 공백 제거 후 비교
+  var COL      = 3;                                          // C열
+
+  Logger.log(dryRun ? '=== 미리보기 (시트 변경 없음) ===' : '=== 실제 적용 ===');
+  Logger.log('대상 지점: ' + LABOR_FIX_BRANCHES.join(', ') + ' (원당은 양식 이식 때 함께 처리)');
+
+  LABOR_FIX_BRANCHES.forEach(function (branchName) {
+    var config = BRANCH_CONFIG[branchName];
+    if (!config) return;
+    var ss = SpreadsheetApp.openById(config.ssId);
+    Logger.log('\n──── [' + branchName + '] ────');
+
+    // 1) 정상본에서 수식을 가져온다
+    var src = ss.getSheetByName(SRC_TAB);
+    if (!src) { Logger.log('  ✗ ' + SRC_TAB + ' 없음 — 이 지점 건너뜀'); return; }
+
+    var srcRow = findLabelRow_(src, LABEL);
+    if (srcRow < 0) { Logger.log('  ✗ ' + SRC_TAB + '에 "알바 급여" 행 없음 — 건너뜀'); return; }
+
+    var srcFormula = src.getRange(srcRow, COL).getFormula();
+
+    // 안전장치: 엉뚱한 수식을 퍼뜨리지 않는다
+    if (srcFormula.indexOf('SUMIFS') < 0 || srcFormula.indexOf('인건비') < 0) {
+      Logger.log('  ✗ 원본 수식이 예상과 다름 — 중단');
+      Logger.log('     ' + srcRow + '행 C: ' + (srcFormula || '(수식 없음)'));
+      return;
+    }
+    Logger.log('  원본: ' + SRC_TAB + ' ' + srcRow + '행 C열');
+    Logger.log('     ' + srcFormula);
+
+    // 2) 대상 시트에 옮긴다
+    TARGETS.forEach(function (tabName) {
+      var sh = ss.getSheetByName(tabName);
+      if (!sh) { Logger.log('  · ' + tabName + ': 탭 없음 — 건너뜀'); return; }
+
+      var row = findLabelRow_(sh, LABEL);
+      if (row < 0) { Logger.log('  · ' + tabName + ': "알바 급여" 행 없음 — 건너뜀'); return; }
+
+      var cur = sh.getRange(row, COL).getFormula();
+      if (normalizeF_(cur) === normalizeF_(srcFormula)) {
+        Logger.log('  · ' + tabName + ' ' + row + '행: 이미 동일 — 건너뜀');
+        return;
+      }
+
+      Logger.log('  · ' + tabName + ' ' + row + '행 C열');
+      Logger.log('      전: ' + (cur || '(수식 없음, 값=' + sh.getRange(row, COL).getDisplayValue() + ')'));
+      Logger.log('      후: ' + srcFormula);
+
+      if (!dryRun) {
+        sh.getRange(row, COL).setFormula(srcFormula);
+        SpreadsheetApp.flush();
+        Logger.log('      → 적용됨. 결과값: ' + sh.getRange(row, COL).getDisplayValue());
+      }
+    });
+  });
+
+  Logger.log(dryRun
+    ? '\n※ 아무것도 바꾸지 않았습니다. 위 내용이 맞으면 fixLaborFormula_적용 을 실행하세요.'
+    : '\n※ 적용 완료. 시트에서 인건비 행을 확인하세요.');
+}
+
+/** B열에서 라벨을 찾아 행 번호를 돌려준다 (공백 무시). 못 찾으면 -1 */
+function findLabelRow_(sheet, label) {
+  var last = Math.min(sheet.getLastRow(), 80);
+  if (last < 1) return -1;
+  var vals = sheet.getRange(1, 2, last, 1).getValues();
+  for (var i = 0; i < vals.length; i++) {
+    if (String(vals[i][0]).replace(/\s+/g, '') === label) return i + 1;
+  }
+  return -1;
+}
+
+function normalizeF_(f) { return String(f).replace(/\s+/g, ''); }
+
+function checkLaborRow() {
+  var COLS = ['A','B','C','D','E','F','G','H'];
+
+  ['백석점', '원당점'].forEach(function (branchName) {
+    var config = BRANCH_CONFIG[branchName];
+    if (!config) return;
+    var ss = SpreadsheetApp.openById(config.ssId);
+
+    ['26년 x월 손익계산서', '26년 7월 손익계산서', '26년 8월 손익계산서'].forEach(function (tabName) {
+      var sh = ss.getSheetByName(tabName);
+      Logger.log('\n╔══ [' + branchName + '] ' + tabName + ' ══');
+      if (!sh) { Logger.log('║  (탭 없음)'); return; }
+
+      // 25~35행: 인건비 행 주변
+      var f1 = sh.getRange(25, 1, 11, 8).getFormulas();
+      var v1 = sh.getRange(25, 1, 11, 8).getDisplayValues();
+      Logger.log('║ ── 25~35행 ──');
+      for (var i = 0; i < f1.length; i++) {
+        var line = '║ ' + (25 + i) + '행 |';
+        for (var c = 0; c < 8; c++) {
+          var s = f1[i][c] || v1[i][c];
+          if (!s) continue;
+          line += ' ' + COLS[c] + '=' + String(s).slice(0, 90) + ' |';
+        }
+        if (line.indexOf('=') > 0) Logger.log(line);
+      }
+
+      // 55~65행: SUM(F59:F63)이 가리키는 곳
+      var f2 = sh.getRange(55, 1, 11, 8).getFormulas();
+      var v2 = sh.getRange(55, 1, 11, 8).getDisplayValues();
+      Logger.log('║ ── 55~65행 (F59:F63 확인) ──');
+      for (var j = 0; j < f2.length; j++) {
+        var l2 = '║ ' + (55 + j) + '행 |';
+        for (var d = 0; d < 8; d++) {
+          var s2 = f2[j][d] || v2[j][d];
+          if (!s2) continue;
+          l2 += ' ' + COLS[d] + '=' + String(s2).slice(0, 90) + ' |';
+        }
+        if (l2.indexOf('=') > 0) Logger.log(l2);
+      }
+    });
+  });
+
+  Logger.log('\n※ 이 로그를 그대로 복사해서 보내주세요. 아무것도 고치지 않았습니다.');
+}
+
+/**
+ * 진단용 — 인건비가 어느 달에 얼마로 기록돼 있는지 확인한다.
+ */
+function checkLaborCosts() {
+  ['백석점', '원당점'].forEach(function (branchName) {
+    var config = BRANCH_CONFIG[branchName];
+    if (!config) return;
+    var ss = SpreadsheetApp.openById(config.ssId);
+    var sh = ss.getSheetByName('지출및매출로그');
+    Logger.log('\n===== [' + branchName + '] 지출및매출로그의 인건비 =====');
+    if (!sh) { Logger.log('  로그 시트 없음'); return; }
+
+    var rows = sh.getDataRange().getValues();
+    var head = rows[0];
+    var cDate = head.indexOf('날짜'),
+        cCat  = head.indexOf('분류'),
+        cName = head.indexOf('항목명'),
+        cAmt  = head.indexOf('금액');
+
+    var found = 0;
+    for (var i = 1; i < rows.length; i++) {
+      if (String(rows[i][cCat]).indexOf('인건비') < 0) continue;
+      var d = rows[i][cDate];
+      var ds = (d instanceof Date) ? Utilities.formatDate(d, TIMEZONE, 'yyyy-MM-dd') : String(d);
+      Logger.log('  ' + ds + '  ' + Number(rows[i][cAmt]).toLocaleString() + '원  ' + rows[i][cName]);
+      found++;
+    }
+    if (!found) Logger.log('  인건비 기록 없음');
+  });
+
+  Logger.log('\n※ 참고: 급여는 "전월분을 다음 달 1일에" 기록합니다.');
+  Logger.log('   예) 8월 1일 자동실행 → 7월 급여를 2026-07-01 자로 기록');
+  Logger.log('   8월 급여를 지금 넣고 싶으면 syncLaborCostsForMonth() 를 실행하세요.');
+}
+
+/**
+ * 특정 월의 인건비를 지금 바로 동기화한다.
+ * 아래 YM 값을 원하는 달로 바꾸고 실행하세요.
+ * (알바계산기에서 그 달 "지급완료" 처리가 되어 있어야 합니다)
+ */
+function syncLaborCostsForMonth() {
+  var YM = '2026-08';          // ← 넣고 싶은 달
+  syncLaborCosts('백석점', YM);
+  syncLaborCosts('원당점', YM);
 }
 
 /**
