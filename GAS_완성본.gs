@@ -53,9 +53,69 @@ function checkApiKey() {
     "https://generativelanguage.googleapis.com/v1beta/models?key=" + key,
     { muteHttpExceptions: true }
   );
-  Logger.log(res.getResponseCode() === 200
-    ? "✅ Gemini API 연결 정상"
-    : "❌ Gemini 응답 " + res.getResponseCode() + " : " + res.getContentText().substring(0, 200));
+  var code = res.getResponseCode();
+  var body = res.getContentText();
+
+  if (code === 200) {
+    Logger.log("✅ 모델 목록 조회 성공");
+
+    // ⚠️ 목록 조회가 된다고 영수증 처리가 되는 건 아니다.
+    //    실제로 쓰는 건 generateContent (POST) 이고, 여기만 막히는 경우가 있다.
+    //    그래서 진짜 쓰는 경로로 한 번 더 시험한다.
+    Logger.log("   실제 분석 경로 시험 중...");
+    var test = UrlFetchApp.fetch(
+      "https://generativelanguage.googleapis.com/v1beta/models/" +
+      GEMINI_MODEL + ":generateContent?key=" + key,
+      {
+        method: "post", contentType: "application/json",
+        payload: JSON.stringify({
+          contents: [{ parts: [{ text: "1+1은? 숫자만 답하세요." }] }],
+          generationConfig: { maxOutputTokens: 10 }
+        }),
+        muteHttpExceptions: true
+      });
+
+    var tc = test.getResponseCode();
+    var tb = test.getContentText();
+
+    if (tc === 200) {
+      Logger.log("✅ Gemini 분석 정상 — 영수증 처리 가능");
+      return;
+    }
+
+    Logger.log("❌ 목록은 되는데 분석이 막힙니다 (HTTP " + tc + ")");
+    Logger.log("   " + tb.substring(0, 300));
+    if (tb.indexOf('API_KEY_INVALID') >= 0) {
+      Logger.log("\n👉 이 키로는 " + GEMINI_MODEL + " 을 쓸 수 없습니다.");
+      Logger.log("   결제가 연결된 프로젝트에서 새 키를 발급하세요.");
+      Logger.log("   https://aistudio.google.com/apikey");
+    } else if (tb.indexOf('quota') >= 0 || tb.indexOf('RESOURCE_EXHAUSTED') >= 0) {
+      Logger.log("\n👉 할당량 초과입니다. 결제 상태와 사용량을 확인하세요.");
+    } else if (tb.indexOf('billing') >= 0) {
+      Logger.log("\n👉 결제가 연결되지 않았습니다.");
+    } else if (tc === 404) {
+      Logger.log("\n👉 모델 이름이 잘못됐습니다. GEMINI_MODEL 을 확인하세요 (현재: " + GEMINI_MODEL + ")");
+    }
+    return;
+  }
+
+  Logger.log("❌ Gemini 응답 " + code);
+  Logger.log("   " + body.substring(0, 300));
+
+  // 무슨 뜻인지까지 알려준다. 코드만 보고는 판단이 안 된다.
+  if (body.indexOf('API_KEY_INVALID') >= 0 || body.indexOf('not valid') >= 0) {
+    Logger.log("\n👉 키가 무효입니다. 삭제됐거나 잘못 복사된 키입니다.");
+    Logger.log("   ① https://aistudio.google.com/apikey 에서 새 키 발급");
+    Logger.log("   ② 프로젝트 설정 > 스크립트 속성 > GEMINI_API_KEY 교체");
+    Logger.log("   ③ checkApiKey() 다시 실행 → ✅ 나오면 완료");
+    Logger.log("   ④ retryFailedFiles() → dailyProcess() 로 밀린 영수증 처리");
+    Logger.log("\n   ⚠️ 키가 무효인 동안 올린 영수증은 하나도 안 들어갔습니다.");
+    Logger.log("      checkBacklog() 로 몇 장 밀렸는지 확인하세요.");
+  } else if (body.indexOf('quota') >= 0 || code === 429) {
+    Logger.log("\n👉 할당량 초과입니다. 구글 클라우드 콘솔에서 사용량을 확인하세요.");
+  } else if (code === 403) {
+    Logger.log("\n👉 권한 문제입니다. 이 키로 Generative Language API 를 쓸 수 있는지 확인하세요.");
+  }
 }
 
 const BRANCH_CONFIG = {
@@ -1225,6 +1285,70 @@ function renameCategory_(dryRun, branch, FROM, TO) {
  *   한 번에 30~45장이 한계다. 그 이상 쌓이면 며칠에 걸쳐 나눠 처리되고
  *   그동안 손익계산서 숫자가 비어 있게 된다.
  */
+/**
+ * 영수증 자동 처리가 언제까지 잘 됐나
+ *
+ *   "언제부터 안 들어왔지?" 를 알아야 그 사이 손익이 얼마나 비었는지 가늠할 수 있습니다.
+ *   원본파일명이 [웹앱] 으로 시작하면 사진에서 AI가 읽은 것입니다.
+ */
+function 마지막처리확인() {
+  Object.keys(BRANCH_CONFIG).forEach(function (branch) {
+    var ss = SpreadsheetApp.openById(BRANCH_CONFIG[branch].ssId);
+    var sh = ss.getSheetByName('지출및매출로그');
+    Logger.log('\n════════ [' + branch + '] ════════');
+    if (!sh || sh.getLastRow() < 2) { Logger.log('  기록 없음'); return; }
+
+    var v = sh.getRange(2, 1, sh.getLastRow() - 1, 7).getValues();
+    var 마지막 = null, 건수 = 0, 일자별 = {};
+
+    v.forEach(function (r) {
+      var src = String(r[5] || '');
+      if (src.indexOf('[웹앱]') !== 0) return;      // AI가 읽은 것만
+      건수++;
+      var t = r[6];                                  // 처리시각
+      var ts = (t instanceof Date)
+        ? Utilities.formatDate(t, TIMEZONE, 'yyyy-MM-dd')
+        : String(t).slice(0, 10);
+      if (!ts) return;
+      일자별[ts] = (일자별[ts] || 0) + 1;
+      if (!마지막 || ts > 마지막) 마지막 = ts;
+    });
+
+    if (!건수) { Logger.log('  AI가 읽은 기록이 없습니다'); return; }
+
+    Logger.log('  AI 분석 기록 ' + 건수 + '건');
+    Logger.log('  마지막 처리일: ' + 마지막);
+
+    var 오늘 = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd');
+    var 경과 = Math.round((new Date(오늘) - new Date(마지막)) / 86400000);
+    // 대기 중인 파일이 있는데 최근 처리가 없으면 지금 고장난 것이다
+    var 대기 = 0;
+    try {
+      var files = DriveApp.getFolderById(BRANCH_CONFIG[branch].folderId).getFiles();
+      while (files.hasNext()) {
+        var n = files.next().getName().trim();
+        if (!n.startsWith('[완료]') && !n.startsWith('[확인요망]')) 대기++;
+      }
+    } catch (e) {}
+
+    if (경과 >= 2) {
+      Logger.log('  ⚠️ ' + 경과 + '일째 새로 들어온 것이 없습니다');
+    } else {
+      Logger.log('  이력상 ' + 경과 + '일 전까지 처리됨');
+    }
+    if (대기 > 0) {
+      Logger.log('  ⚠️ 처리 대기 ' + 대기 + '장 — 아직 안 들어간 영수증입니다');
+    }
+    Logger.log('  ※ 이건 과거 이력입니다. 지금 키가 살아있는지는 checkApiKey() 로 확인하세요.');
+
+    Logger.log('\n  최근 처리일 10개');
+    Object.keys(일자별).sort().reverse().slice(0, 10).forEach(function (d) {
+      Logger.log('     ' + d + '  ' + 일자별[d] + '건');
+    });
+  });
+  Logger.log('\n※ 마지막 처리일 다음날부터 올린 영수증은 아직 안 들어갔습니다.');
+}
+
 function checkBacklog() {
   var 총 = 0;
   Object.keys(BRANCH_CONFIG).forEach(function (branch) {
@@ -1608,8 +1732,15 @@ function callGeminiWithDocType(imageData, docType) {
       if (code === 200) {
         var json      = JSON.parse(body);
         var candidate = json.candidates && json.candidates[0];
-        if (!candidate) { if (attempt < 3) Utilities.sleep(3000 * attempt); continue; }
-        if (candidate.finishReason === "SAFETY") return null;
+        if (!candidate) {
+          Logger.log("  ⚠️ 응답에 결과가 없음: " + body.slice(0, 200));
+          if (attempt < 3) Utilities.sleep(3000 * attempt);
+          continue;
+        }
+        if (candidate.finishReason === "SAFETY") {
+          Logger.log("  ⛔ 안전 필터에 걸림 — 이 이미지는 분석 불가");
+          return null;
+        }
 
         var text    = (candidate.content && candidate.content.parts && candidate.content.parts[0].text) || "";
         var cleaned = text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
@@ -1626,10 +1757,22 @@ function callGeminiWithDocType(imageData, docType) {
         if (attempt < 3) Utilities.sleep(3000 * attempt);
 
       } else if (code === 429) {
+        // 할당량 초과 — 기다렸다 다시 시도
+        Logger.log("  ⏳ 429 할당량 초과 — " + Math.pow(2, attempt) * 5 + "초 대기 후 재시도");
         Utilities.sleep(Math.pow(2, attempt) * 5000);
+
       } else if (code === 400 || code === 403) {
+        // 재시도해도 소용없는 오류. 다만 이유는 반드시 남긴다.
+        // (예전엔 로그 없이 return null 이라 "왜 실패했는지" 알 수가 없었다)
+        var 사유 = code === 403
+          ? '키 권한 문제 — API 키가 삭제됐거나 이 API를 못 쓰는 키'
+          : '요청 거부 — 이미지 형식·크기 문제이거나 키가 잘못됨';
+        Logger.log("  ❌ " + code + " " + 사유);
+        Logger.log("     응답: " + body.slice(0, 300));
         return null;
+
       } else {
+        Logger.log("  ⚠️ HTTP " + code + " — " + body.slice(0, 200));
         if (attempt < 3) Utilities.sleep(3000 * attempt);
       }
     } catch (e) {
@@ -1797,6 +1940,7 @@ function dailyProcess() {
   try {
     if (!lock.tryLock(300000)) { Logger.log("⚠️ 다른 프로세스 실행 중"); return; }
     Logger.log("=== 자동 처리 시작 ===");
+    _RUN_STAT = { 성공: 0, 오류: 0, 거름: 0 };
     processFiles("원당점");
     processFiles("백석점");
 
@@ -1807,6 +1951,13 @@ function dailyProcess() {
 
     // 알바 데이터 스냅샷 — 알바 시트 A1 이 날아가도 되돌릴 수 있게
     알바데이터_백업();
+
+    // 처리 결과 점검 — 전부 실패했으면 메일로 알린다
+    //
+    //   2026-08-19: Gemini API 키가 무효가 되어 영수증이 하나도 안 들어가고
+    //   있었는데, 로그를 열어보기 전까지 아무도 몰랐다.
+    //   영수증이 안 들어가면 손익 숫자가 조용히 비어간다.
+    checkRunHealth_();
     // syncMeatCosts("원당점");   // 원당점 입고기록도 있으면 주석 해제
 
     Logger.log("=== 자동 처리 완료 ===");
@@ -1822,6 +1973,58 @@ function dailyProcess() {
 // 5분에서 스스로 멈추고 남은 장수를 남기면 상황이 명확해진다.
 var _RUN_START = null;
 var MAX_RUN_MS = 5 * 60 * 1000;
+
+// 이번 실행의 처리 결과 — checkRunHealth_ 가 읽는다
+var _RUN_STAT = { 성공: 0, 오류: 0, 거름: 0 };
+
+var OWNER_EMAIL = 'seungjin0216@gmail.com';
+
+/**
+ * 실행이 끝난 뒤 결과를 보고 이상하면 메일을 보낸다
+ *
+ *   영수증이 안 들어가면 손익 숫자가 조용히 비어갑니다.
+ *   로그를 매일 열어보는 사람은 없으므로 알림이 필요합니다.
+ *
+ *   Gemini 키가 무효가 되어 전부 실패하던 걸 며칠 뒤에야 발견한 적이 있습니다.
+ *   (2026-08-19)
+ */
+function checkRunHealth_() {
+  var s = _RUN_STAT;
+  Logger.log('\n── 이번 실행 결과 ── 성공 ' + s.성공 + ' · 오류 ' + s.오류 + ' · 거름 ' + s.거름);
+
+  // 처리할 게 있었는데 하나도 성공 못 했으면 뭔가 고장난 것
+  if (s.오류 > 0 && s.성공 === 0) {
+    notifyOwner_(
+      '영수증 처리가 전부 실패했습니다',
+      '오류 ' + s.오류 + '건 · 성공 0건\n\n' +
+      '자주 나오는 원인\n' +
+      ' · Gemini API 키 무효 → 프로젝트 설정 > 스크립트 속성 GEMINI_API_KEY 확인\n' +
+      ' · 할당량 초과 → 구글 클라우드 콘솔 확인\n\n' +
+      'GAS 편집기에서 checkApiKey() 를 실행하면 바로 알 수 있습니다.'
+    );
+    return;
+  }
+
+  // 절반 넘게 실패하면 뭔가 이상한 것
+  if (s.오류 > 0 && s.오류 >= s.성공) {
+    notifyOwner_(
+      '영수증 처리 실패가 많습니다',
+      '성공 ' + s.성공 + '건 · 오류 ' + s.오류 + '건\n\n' +
+      '드라이브 폴더에서 [확인요망] 파일을 확인해 주세요.'
+    );
+  }
+}
+
+/** 사장님께 메일. 솔라피와 무관한 경로라 그쪽이 막혀도 나간다 */
+function notifyOwner_(제목, 내용) {
+  Logger.log('🚨 ' + 제목);
+  try {
+    MailApp.sendEmail(OWNER_EMAIL, '🚨 [손익계산서] ' + 제목,
+      내용 + '\n\n시각: ' + Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd HH:mm'));
+  } catch (e) {
+    Logger.log('메일 전송 실패: ' + e.message);
+  }
+}
 
 // 매일 도는 동기화가 볼 기간 (개월). 과거는 이미 들어가 있고 바뀌지 않는다.
 var SYNC_RECENT_MONTHS = 2;
@@ -1897,6 +2100,8 @@ function processFiles(branchName) {
     Utilities.sleep(2000);
   }
 
+  _RUN_STAT.성공 += processed;
+  _RUN_STAT.오류 += errors;
   Logger.log("✅ 성공: " + processed + " | ⏭ 스킵: " + skipped + " | ❌ 오류: " + errors);
   if (남음 > 0) {
     Logger.log("⏳ 시간 초과로 " + 남음 + "장을 남겼습니다 — 내일 새벽 2시에 이어서 처리됩니다.");
