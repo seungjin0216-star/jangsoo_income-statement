@@ -556,6 +556,686 @@ function 급여내역확인() {
   Logger.log('   staffBackfill_적용() 을 다시 실행하세요.');
 }
 
+// ═══════════════════════════════════════════════════════════
+// 분류(계정) 이름 바꾸기
+//
+//  백석 '가게카드' 는 원래 '마트' 였다. 오프라인 마트 지출이 적어서
+//  온라인·오프라인을 묶어 '가게카드' 로 부르기로 했는데,
+//  시트 라벨만 바꾸고 로그 분류와 수식은 옛 이름 그대로 남아 있다.
+//
+//  이름이 세 군데에 흩어져 있어서 한 곳만 바꾸면 집계가 끊긴다.
+//    ① 지출및매출로그 B열 (분류)
+//    ② 월별탭 수식 안의 "분류명"  ← 여기가 제일 많다
+//    ③ AI 프롬프트가 적어 넣는 분류명 (코드 안)
+//
+//  ①②를 한 번에 바꾸고, ③은 코드에서 따로 고친다.
+// ═══════════════════════════════════════════════════════════
+
+/** 로그에 실제로 어떤 분류가 있는지 — 이름 바꾸기 전에 반드시 확인 */
+function 분류목록확인() {
+  Object.keys(BRANCH_CONFIG).forEach(function (branch) {
+    var ss = SpreadsheetApp.openById(BRANCH_CONFIG[branch].ssId);
+    var sh = ss.getSheetByName('지출및매출로그');
+    Logger.log('\n═══ [' + branch + '] 지출및매출로그 분류 ═══');
+    if (!sh || sh.getLastRow() < 2) { Logger.log('  (데이터 없음)'); return; }
+
+    var v = sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues();
+    var 표 = {};
+    v.forEach(function (r) {
+      var c = String(r[1]).trim();
+      if (!c) return;
+      if (!표[c]) 표[c] = { 건수: 0, 금액: 0, 최근: '' };
+      표[c].건수++;
+      표[c].금액 += Number(r[3]) || 0;
+      var d = toDate_(r[0]);
+      if (d) {
+        var ym = Utilities.formatDate(d, TIMEZONE, 'yyyy-MM');
+        if (ym > 표[c].최근) 표[c].최근 = ym;
+      }
+    });
+
+    Object.keys(표).sort().forEach(function (c) {
+      Logger.log('  ' + c + '  —  ' + 표[c].건수 + '건, ' +
+                 표[c].금액.toLocaleString() + '원, 최근 ' + 표[c].최근);
+    });
+  });
+  Logger.log('\n※ 월별탭 수식이 참조하는 이름과 위가 일치해야 집계가 됩니다.');
+}
+
+/**
+ * 손익계산서 시트가 참조하는 분류 vs 로그에 실제로 있는 분류
+ *
+ *   둘이 어긋나면 돈이 로그에는 쌓이는데 시트에는 안 잡힌다.
+ *   숫자가 없으니 눈치채기 어렵고, 그만큼 이익이 부풀려 보인다.
+ */
+function 계정대조() {
+  Object.keys(BRANCH_CONFIG).forEach(function (branch) {
+    var ss = SpreadsheetApp.openById(BRANCH_CONFIG[branch].ssId);
+    Logger.log('\n════════ [' + branch + '] ════════');
+
+    // ① 로그에 있는 분류 + 금액
+    var 로그 = {};
+    var lg = ss.getSheetByName('지출및매출로그');
+    if (lg && lg.getLastRow() > 1) {
+      lg.getRange(2, 1, lg.getLastRow() - 1, 4).getValues().forEach(function (r) {
+        var c = String(r[1]).trim();
+        if (!c) return;
+        로그[c] = (로그[c] || 0) + (Number(r[3]) || 0);
+      });
+    }
+
+    // ② 시트 수식이 참조하는 분류 (최근 월 탭 기준)
+    var tab = null;
+    for (var m = 12; m >= 1; m--) {
+      var t = ss.getSheetByName('26년 ' + m + '월 손익계산서');
+      if (t) { tab = t; break; }
+    }
+    if (!tab) { Logger.log('  월 탭 없음'); return; }
+    Logger.log('기준 탭: ' + tab.getName());
+
+    var 참조 = {};   // 분류 → 그 분류를 쓰는 행 라벨
+    var lastRow = Math.min(tab.getLastRow(), 60);
+    var fs = tab.getRange(1, 1, lastRow, Math.min(tab.getLastColumn(), 40)).getFormulas();
+    var labels = tab.getRange(1, 2, lastRow, 1).getDisplayValues();
+    var re = /'지출및매출로그'!\$B:\$B\s*,\s*"([^"]+)"/g;
+
+    for (var r = 0; r < fs.length; r++) {
+      for (var c = 0; c < fs[r].length; c++) {
+        var f = fs[r][c];
+        if (!f) continue;
+        var mm;
+        re.lastIndex = 0;
+        while ((mm = re.exec(f)) !== null) {
+          var cat = mm[1];
+          var lab = String(labels[r][0] || '').trim();
+          if (!참조[cat]) 참조[cat] = {};
+          if (lab) 참조[cat][lab] = true;
+        }
+      }
+    }
+
+    // ③ 대조
+    Logger.log('\n── 🔴 로그에 있는데 시트가 안 읽는 분류 ──');
+    var 미집계 = 0;
+    Object.keys(로그).sort().forEach(function (c) {
+      if (참조[c]) return;
+      if (로그[c] === 0) return;
+      if (c === DUP_EXCLUDE) {          // 일부러 제외한 것 — 문제 아님
+        Logger.log('   "' + c + '"  ' + 로그[c].toLocaleString() + '원  (의도된 제외)');
+        return;
+      }
+      Logger.log('   "' + c + '"  ' + 로그[c].toLocaleString() + '원');
+      미집계 += 로그[c];
+    });
+    if (!미집계) Logger.log('   없음 ✅');
+    else Logger.log('   ↳ 합계 ' + 미집계.toLocaleString() + '원이 손익에 안 잡힙니다');
+
+    Logger.log('\n── 🟡 시트가 읽는데 로그에 없는 분류 ──');
+    var 빈것 = 0;
+    Object.keys(참조).sort().forEach(function (c) {
+      if (로그[c] !== undefined) return;
+      Logger.log('   "' + c + '"  ← ' + Object.keys(참조[c]).join(', ') + ' 행이 참조');
+      빈것++;
+    });
+    if (!빈것) Logger.log('   없음 ✅');
+
+    Logger.log('\n── 🟢 정상 연결 ──');
+    Object.keys(참조).sort().forEach(function (c) {
+      if (로그[c] === undefined) return;
+      Logger.log('   "' + c + '"  ' + (로그[c] || 0).toLocaleString() + '원  → ' +
+                 Object.keys(참조[c]).join(', '));
+    });
+
+    // ④ 이름이 비슷한 것 (공백·띄어쓰기 차이로 갈린 분류)
+    var keys = Object.keys(로그);
+    var 의심 = [];
+    for (var i = 0; i < keys.length; i++) {
+      for (var j = i + 1; j < keys.length; j++) {
+        if (keys[i].replace(/\s+/g, '') === keys[j].replace(/\s+/g, '')) {
+          의심.push('"' + keys[i] + '" ↔ "' + keys[j] + '"');
+        }
+      }
+    }
+    if (의심.length) {
+      Logger.log('\n── ⚠️ 띄어쓰기만 다른 분류 (합쳐야 함) ──');
+      의심.forEach(function (x) { Logger.log('   ' + x); });
+    }
+  });
+  Logger.log('\n※ 읽기만 했습니다.');
+}
+
+/**
+ * 이미 다른 계정에 포함돼 중복인 기록에 붙이는 분류.
+ *
+ *   지우지 않는 이유: 영수증은 실제로 있었고 기록도 남아야 한다.
+ *   다만 어느 수식도 이 이름을 읽지 않으므로 손익에는 반영되지 않는다.
+ *   예) 특양 구매 → 가게카드(kb카드) 출금액에 이미 포함돼 있음
+ */
+var DUP_EXCLUDE = '중복제외(카드포함)';
+
+/**
+ * 이름 통일 계획 — 2026-08-16 계정대조 결과에 따름
+ *
+ *   백석 '가게카드' 는 이름이 세 개로 갈려 있었다.
+ *     로그   "카드값"    1,900만원  ← 예전 마이그레이션으로 바뀜
+ *     수식   "마트"                 ← 그때 같이 안 바꿔서 옛 이름 그대로
+ *     시트라벨 "가게카드(네이버,쿠팡,특양)"
+ *   → 수식과 로그가 서로 다른 이름을 보고 있어 1,900만원이 집계에서 빠졌다.
+ *
+ *   '기타 잡비용' 은 공백 하나 차이로 '기타잡비용' 과 갈렸다.
+ *   '특양' 은 가게카드/가게외부카드에 포함돼야 하는데 따로 떨어져 있다.
+ *
+ *   각 줄은 로그와 수식을 동시에 바꾼다. 한쪽만 바꾸면 집계가 끊긴다.
+ */
+var RENAME_PLAN = [
+  { branch: '백석점', from: '마트',        to: '가게카드',   비고: '수식 8개월치 (로그엔 없음)' },
+  { branch: '백석점', from: '카드값',      to: '가게카드',   비고: '로그 7건 = kb카드 출금' },
+  { branch: '백석점', from: '기타 잡비용', to: '기타잡비용', 비고: '공백 통합' },
+  { branch: '백석점', from: '특양',        to: DUP_EXCLUDE,  비고: '카드에 이미 포함 — 집계 제외' },
+
+  // ── 원당은 백석 양식이 완성된 뒤에 ──────────────────────
+  // 계정대조 결과 미집계 19,829,567원. 아래가 확인되면 주석을 푼다.
+  //   기타 잡비용 12,311,940원  공백만 다름 — 바로 통합 가능
+  //   특양           224,400원  카드 포함 여부 미확인 (원당은 '가게외부카드' 계정이 따로 있음)
+  //   인건비       7,119,000원  급여수식_적용 으로 해결 (이름 문제 아님)
+  // { branch: '원당점', from: '기타 잡비용', to: '기타잡비용', 비고: '공백 통합' },
+  // { branch: '원당점', from: '특양',        to: DUP_EXCLUDE,  비고: '카드 포함 여부 확인 필요' },
+];
+
+/**
+ * 의심스러운 기록을 항목명까지 펼쳐서 본다
+ *
+ *   AI가 애매한 영수증을 전부 '기타잡비용' 으로 몰아넣은 이력이 있다.
+ *   합계만 보면 알 수 없고 항목명을 봐야 판단이 된다.
+ *
+ *   아래 CHECK_CATEGORIES 를 보고 싶은 분류로 바꿔서 실행.
+ */
+/**
+ * 한 계정을 끝까지 추적한다 — 로그 · 수식 · 실제 표시값
+ *
+ *   "수식은 A를 보는데 로그엔 B로 쌓인다" 같은 어긋남은
+ *   합계만 봐서는 안 보인다. 셋을 나란히 놓고 봐야 판단이 된다.
+ */
+var TRACE_BRANCH = '백석점';
+var TRACE_ROW_LABEL = '가게카드';      // B열 라벨 (공백 무시하고 앞부분 일치)
+var TRACE_CATEGORIES = ['마트', '카드값', '가게카드'];   // 관련 있을 법한 분류 전부
+
+/**
+ * 지금 시트가 어떤 상태인지 그대로 찍어본다 (피해 확인용)
+ *
+ *   2026-08-17 분류정리_적용 이 range.setFormulas(전체) 를 쓰는 바람에
+ *   수식 없이 값만 들어 있던 칸이 전부 지워졌다.
+ *   무엇이 남고 무엇이 사라졌는지 눈으로 확인하기 위한 함수.
+ */
+function 현재상태확인() {
+  var BRANCH = '백석점';
+  var TABS = ['26년 7월 손익계산서', '26년 8월 손익계산서'];
+
+  var ss = SpreadsheetApp.openById(BRANCH_CONFIG[BRANCH].ssId);
+
+  TABS.forEach(function (tabName) {
+    var sh = ss.getSheetByName(tabName);
+    Logger.log('\n════════ ' + tabName + ' ════════');
+    if (!sh) { Logger.log('  탭 없음'); return; }
+
+    var last = Math.min(sh.getLastRow(), 45);
+    var labels = sh.getRange(1, 2, last, 1).getDisplayValues();
+    var cF = sh.getRange(1, 3, last, 1).getFormulas();
+    var cV = sh.getRange(1, 3, last, 1).getDisplayValues();
+
+    Logger.log('  행 | B열(계정)              | C열 상태');
+    Logger.log('  ───┼───────────────────────┼──────────────────────');
+    for (var i = 0; i < last; i++) {
+      var lab = String(labels[i][0] || '').trim();
+      if (!lab) continue;
+      var f = cF[i][0], v = cV[i][0];
+      var 상태;
+      if (f)            상태 = '수식  → ' + (v || '(빈값)');
+      else if (v !== '') 상태 = '값    ' + v;
+      else               상태 = '❌ 비어 있음';
+      Logger.log('  ' + String(i + 1).padStart(2) + ' | ' +
+                 (lab + '                       ').slice(0, 22) + ' | ' + 상태);
+    }
+
+    // 하단 알바표도 살아있는지
+    var b = sh.getRange(55, 2, 12, 6).getDisplayValues();
+    var 살아있음 = b.filter(function (r) { return String(r[0]).trim(); }).length;
+    Logger.log('  하단 55~66행에 내용 있는 줄: ' + 살아있음 + '개');
+  });
+  Logger.log('\n※ "❌ 비어 있음" 이 고정비 행(임대료·보험 등)에 있으면 지워진 것입니다.');
+}
+
+function 계정추적() {
+  var ss = SpreadsheetApp.openById(BRANCH_CONFIG[TRACE_BRANCH].ssId);
+  Logger.log('════════ [' + TRACE_BRANCH + '] "' + TRACE_ROW_LABEL + '" 행 추적 ════════');
+
+  // ① 로그에 무엇이 얼마나 있나
+  Logger.log('\n──── ① 지출및매출로그 ────');
+  var lg = ss.getSheetByName('지출및매출로그');
+  var 월별 = {};
+  if (lg && lg.getLastRow() > 1) {
+    var v = lg.getRange(2, 1, lg.getLastRow() - 1, 6).getValues();
+    TRACE_CATEGORIES.forEach(function (cat) {
+      var rows = [];
+      v.forEach(function (r, i) {
+        if (String(r[1]).trim() !== cat) return;
+        var d = toDate_(r[0]);
+        var ymd = d ? Utilities.formatDate(d, TIMEZONE, 'yyyy-MM-dd') : String(r[0]);
+        rows.push({ 행: i + 2, 날짜: ymd, 항목: String(r[2] || ''), 금액: Number(r[3]) || 0 });
+        var ym = ymd.slice(0, 7);
+        if (!월별[cat]) 월별[cat] = {};
+        월별[cat][ym] = (월별[cat][ym] || 0) + (Number(r[3]) || 0);
+      });
+      if (!rows.length) { Logger.log('  "' + cat + '"  —  없음'); return; }
+      var 합 = rows.reduce(function (a, x) { return a + x.금액; }, 0);
+      Logger.log('  "' + cat + '"  ' + rows.length + '건  ' + 합.toLocaleString() + '원');
+      rows.sort(function (a, b) { return a.날짜 < b.날짜 ? -1 : 1; });
+      rows.forEach(function (x) {
+        Logger.log('      ' + x.행 + '행 | ' + x.날짜 + ' | ' + (x.항목 || '(항목명 없음)') +
+                   ' | ' + x.금액.toLocaleString() + '원');
+      });
+    });
+  }
+
+  // ② 월별 탭에서 그 행이 어떤 수식을 쓰고 얼마를 보여주나
+  Logger.log('\n──── ② 월별 탭 ────');
+  for (var m = 1; m <= 12; m++) {
+    var tab = ss.getSheetByName('26년 ' + m + '월 손익계산서');
+    if (!tab) continue;
+    var ym = '2026-' + ('0' + m).slice(-2);
+
+    var row = -1;
+    var last = Math.min(tab.getLastRow(), 60);
+    var labels = tab.getRange(1, 2, last, 1).getDisplayValues();
+    for (var i = 0; i < labels.length; i++) {
+      if (String(labels[i][0]).replace(/\s+/g, '').indexOf(TRACE_ROW_LABEL.replace(/\s+/g, '')) === 0) { row = i + 1; break; }
+    }
+    if (row < 0) { Logger.log('  ' + m + '월: "' + TRACE_ROW_LABEL + '" 행 없음'); continue; }
+
+    var lastCol = Math.min(tab.getLastColumn(), 40);
+    var fs = tab.getRange(row, 1, 1, lastCol).getFormulas()[0];
+    var ds = tab.getRange(row, 1, 1, lastCol).getDisplayValues()[0];
+
+    // 수식이 참조하는 분류 수집
+    var 참조 = {};
+    var re = /'지출및매출로그'!\$B:\$B\s*,\s*"([^"]+)"/g;
+    fs.forEach(function (f) {
+      if (!f) return;
+      var mm; re.lastIndex = 0;
+      while ((mm = re.exec(f)) !== null) 참조[mm[1]] = true;
+    });
+
+    // C열(합계) 값과, 값이 들어있는 일별 칸 수
+    var 합계표시 = ds[2];
+    var 일별있음 = 0;
+    for (var c = 6; c < lastCol; c++) {
+      var t = String(ds[c] || '').replace(/[^0-9]/g, '');
+      if (t && Number(t) > 0) 일별있음++;
+    }
+
+    var 로그액 = 0;
+    Object.keys(참조).forEach(function (cat) { 로그액 += ((월별[cat] || {})[ym] || 0); });
+
+    Logger.log('  ' + m + '월  ' + row + '행  C열=' + (합계표시 || '(빈칸)') +
+               '   수식참조: ' + (Object.keys(참조).join(',') || '(없음)') +
+               '   일별값 ' + 일별있음 + '칸   로그(' + ym + ')=' + 로그액.toLocaleString() + '원');
+    if (!Object.keys(참조).length && 합계표시) Logger.log('        ↳ 수식 없이 직접 입력된 값입니다');
+  }
+
+  Logger.log('\n※ C열 값과 로그액이 다르면 어긋난 것입니다.');
+}
+
+// ═══════════════════════════════════════════════════════════
+// 로그 행 안전 삭제
+//
+//  잘못 지우면 되돌릴 수 없다는 게 가장 무서운 부분이다.
+//  그래서 세 겹으로 막는다.
+//
+//   ① 미리보기에서 지울 행의 날짜·항목명·금액·출처를 전부 보여준다
+//      → 행 번호를 잘못 적었으면 여기서 바로 드러난다
+//   ② 지우기 전에 '삭제보관함' 시트에 원본 그대로 복사한다
+//      → 언제·몇 행에 뭐가 있었는지 남는다. 되돌릴 수 있다
+//   ③ 행 번호가 큰 것부터 지운다
+//      → 위에서 지우면 아래 번호가 밀려 엉뚱한 행이 지워진다
+//
+//  출처(F열)를 꼭 보라.
+//    [자동]... 로 시작 → 자동 동기화가 만든 것. 지워도 다음 실행에 다시 생긴다
+//    [웹앱]... 이미지 → AI가 영수증에서 읽은 것
+//    (빈칸)          → 손으로 입력한 것
+// ═══════════════════════════════════════════════════════════
+var DELETE_BRANCH = '백석점';
+var DELETE_ROWS = [
+  3, 4, 5, 6,              // 2012-05-01 곱창·대창·막창·간천엽 — 고기값인데 잡비용
+  66, 102, 132, 173,       // 중복 쌍의 한쪽
+  193, 194, 195, 196,      // 0원 (미락 발주서 오인식)
+  588, 620,                // 2020-07 매출합계 — 매출인데 비용
+];
+
+function 삭제_미리보기() { deleteLogRows_(true); }
+function 삭제_적용()   { deleteLogRows_(false); }
+
+function deleteLogRows_(dryRun) {
+  var ss = SpreadsheetApp.openById(BRANCH_CONFIG[DELETE_BRANCH].ssId);
+  var sh = ss.getSheetByName('지출및매출로그');
+  if (!sh) { Logger.log('❌ 로그 시트 없음'); return; }
+
+  var rows = DELETE_ROWS.slice().sort(function (a, b) { return b - a; });   // 내림차순
+  var lastRow = sh.getLastRow();
+  var 백업 = [], 합계 = 0;
+
+  Logger.log(dryRun ? '════ 미리보기 (삭제 안 함) ════' : '════ 실제 삭제 ════');
+  Logger.log('[' + DELETE_BRANCH + '] ' + rows.length + '행\n');
+
+  // 위에서부터 읽어서 보여주기 (사람이 보기 편하게 오름차순)
+  rows.slice().reverse().forEach(function (r) {
+    if (r < 2 || r > lastRow) { Logger.log('  ⚠️ ' + r + '행: 범위 밖 — 건너뜀'); return; }
+    var v = sh.getRange(r, 1, 1, 8).getValues()[0];
+    var d = toDate_(v[0]);
+    var 날짜 = d ? Utilities.formatDate(d, TIMEZONE, 'yyyy-MM-dd') : String(v[0]);
+    var 출처 = String(v[5] || '').trim();
+    var 종류 = 출처.indexOf('[자동]') === 0 ? '자동동기화'
+             : 출처.indexOf('[웹앱]') === 0 ? 'AI분석'
+             : 출처 ? '기타' : '수기입력';
+
+    Logger.log('  ' + String(r).padStart(4) + '행 | ' + 날짜 + ' | ' +
+               String(v[1]) + ' | ' + (v[2] || '(항목명없음)') + ' | ' +
+               (Number(v[3]) || 0).toLocaleString() + '원');
+    Logger.log('        출처: ' + 종류 + (출처 ? '  ' + 출처.slice(0, 60) : ''));
+    if (종류 === '자동동기화') {
+      Logger.log('        ⚠️ 자동 동기화가 만든 행입니다. 지워도 다음 실행에 다시 생깁니다.');
+    }
+    합계 += Number(v[3]) || 0;
+    백업.push([r].concat(v));
+  });
+
+  Logger.log('\n  삭제 대상 합계: ' + 합계.toLocaleString() + '원');
+
+  if (dryRun) {
+    Logger.log('\n※ 아무것도 지우지 않았습니다.');
+    Logger.log('   위 항목명이 지우려던 것과 맞는지 확인하고 삭제_적용() 을 실행하세요.');
+    return;
+  }
+
+  // ── 백업 ──
+  var bk = ss.getSheetByName('삭제보관함');
+  if (!bk) {
+    bk = ss.insertSheet('삭제보관함');
+    bk.appendRow(['삭제시각', '원래행', '날짜', '분류', '항목명', '금액', '지점', '원본파일명', '처리시각', '파일ID']);
+    bk.getRange(1, 1, 1, 10).setFontWeight('bold').setBackground('#fee2e2');
+    bk.setFrozenRows(1);
+  }
+  var now = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd HH:mm:ss');
+  백업.forEach(function (b) { bk.appendRow([now].concat(b)); });
+  SpreadsheetApp.flush();
+  Logger.log('\n  💾 삭제보관함에 ' + 백업.length + '행 백업 완료');
+
+  // ── 삭제 (큰 번호부터) ──
+  var 지움 = 0;
+  rows.forEach(function (r) {
+    if (r < 2 || r > lastRow) return;
+    sh.deleteRow(r);
+    지움++;
+  });
+  SpreadsheetApp.flush();
+  Logger.log('  🗑 ' + 지움 + '행 삭제 완료');
+  Logger.log('\n※ 되돌리려면 「삭제보관함」 시트의 내용을 로그에 다시 붙여넣으면 됩니다.');
+}
+
+var CHECK_BRANCH = '백석점';       // '' 로 두면 전 지점
+var CHECK_CATEGORIES = ['기타잡비용', '기타 잡비용', '거래명세표', '영수증', '통신요금'];
+
+function 의심항목확인() {
+  Object.keys(BRANCH_CONFIG).forEach(function (branch) {
+    if (CHECK_BRANCH && branch !== CHECK_BRANCH) return;
+    var ss = SpreadsheetApp.openById(BRANCH_CONFIG[branch].ssId);
+    var sh = ss.getSheetByName('지출및매출로그');
+    if (!sh || sh.getLastRow() < 2) return;
+
+    Logger.log('\n════════ [' + branch + '] ════════');
+    var v = sh.getRange(2, 1, sh.getLastRow() - 1, 6).getValues();
+
+    CHECK_CATEGORIES.forEach(function (cat) {
+      var rows = [];
+      v.forEach(function (r, i) {
+        if (String(r[1]).trim() !== cat) return;
+        var d = toDate_(r[0]);
+        rows.push({
+          행: i + 2,
+          날짜: d ? Utilities.formatDate(d, TIMEZONE, 'yyyy-MM-dd') : String(r[0]),
+          항목명: String(r[2] || '').trim(),
+          금액: Number(r[3]) || 0,
+          출처: String(r[5] || '').trim(),
+        });
+      });
+      if (!rows.length) return;
+
+      var 합 = rows.reduce(function (a, x) { return a + x.금액; }, 0);
+      Logger.log('\n──── "' + cat + '"  ' + rows.length + '건  ' + 합.toLocaleString() + '원 ────');
+
+      rows.sort(function (a, b) { return a.날짜 < b.날짜 ? -1 : 1; });
+      rows.forEach(function (x) {
+        var 경고 = '';
+        if (x.날짜 < '2026-01-01') 경고 = '  ⚠️ 날짜 이상';
+        else if (x.날짜 > Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd')) 경고 = '  ⚠️ 미래 날짜';
+        Logger.log('  ' + x.행 + '행 | ' + x.날짜 + ' | ' +
+                   (x.항목명 || '(항목명 없음)') + ' | ' +
+                   x.금액.toLocaleString() + '원' + 경고);
+      });
+    });
+  });
+  Logger.log('\n※ 읽기만 했습니다. 왼쪽 숫자가 로그 시트의 행 번호입니다.');
+  Logger.log('   고칠 것은 시트에서 직접 분류(B열)를 수정하시면 됩니다.');
+}
+
+/**
+ * 일별 수식(G~AK)에 뚫린 구멍 메우기
+ *
+ *   7월 가게카드 행처럼 한두 칸만 비어 있는 경우가 있다.
+ *   그 날짜에 지출이 생기면 조용히 누락된다.
+ *
+ *   ⚠️ 일부러 비워둔 행이 있다 — 알바급여·직원급여는 C열에만 수식이 있고
+ *      G~AK 는 전부 비어 있는 게 정상이다 (월 1건만 집계).
+ *      그래서 "대부분 차 있는데 몇 칸만 빈" 행만 손댄다.
+ */
+var HOLE_MIN_FILLED = 25;   // 31칸 중 이만큼 이상 차 있어야 '구멍'으로 본다
+
+// 채울 대상을 좁힌다. 빈 배열이면 전부 본다.
+//   나머지 빈 칸(1월 30일 현금매출, 4월 4·5일 매출 등)은 사장님 확인 결과
+//   문제없이 적용된 것이라 건드리지 않는다.
+var HOLE_ONLY = [
+  { branch: '백석점', tab: '26년 7월 손익계산서', row: 23 },   // 가게카드 1일
+];
+
+function holeAllowed_(branch, tabName, row) {
+  if (!HOLE_ONLY.length) return true;
+  return HOLE_ONLY.some(function (h) {
+    return h.branch === branch && h.tab === tabName && h.row === row;
+  });
+}
+
+function 일별수식_구멍메우기_미리보기() { fillFormulaHoles_(true); }
+function 일별수식_구멍메우기_적용()   { fillFormulaHoles_(false); }
+
+function fillFormulaHoles_(dryRun) {
+  Logger.log(dryRun ? '=== 미리보기 (변경 없음) ===' : '=== 실제 적용 ===');
+  var 총 = 0;
+
+  Object.keys(BRANCH_CONFIG).forEach(function (branch) {
+    var ss = SpreadsheetApp.openById(BRANCH_CONFIG[branch].ssId);
+    Logger.log('\n──── [' + branch + '] ────');
+
+    var tabs = ['26년 x월 손익계산서'];
+    for (var m = 1; m <= 12; m++) tabs.push('26년 ' + m + '월 손익계산서');
+
+    tabs.forEach(function (tabName) {
+      var sh = ss.getSheetByName(tabName);
+      if (!sh) return;
+      var lastRow = Math.min(sh.getLastRow(), 60);
+      if (lastRow < 1) return;
+
+      // 그 달의 마지막 날 — 없는 날짜(2월 29~31일 등)는 비어 있는 게 정상이다
+      var mm = tabName.match(/26년 (\d+)월/);
+      var 일수 = mm ? new Date(2026, Number(mm[1]), 0).getDate() : 31;
+
+      var rg = sh.getRange(1, 7, lastRow, 31);          // G~AK
+      var fs = rg.getFormulas();
+      var vs = rg.getDisplayValues();                    // 값도 함께 본다
+      var labels = sh.getRange(1, 2, lastRow, 1).getDisplayValues();
+
+      for (var r = 0; r < fs.length; r++) {
+        var filled = [], 진짜구멍 = [], 수기값 = [];
+        for (var c = 0; c < 31; c++) {
+          if (c + 1 > 일수) continue;                    // 그 달에 없는 날 — 건너뜀
+          if (fs[r][c]) { filled.push(c); continue; }
+          // 수식은 없는데 값이 있으면 손으로 넣은 것이다. 덮어쓰면 그 숫자가 사라진다.
+          if (String(vs[r][c] || '').trim() !== '') 수기값.push(c);
+          else 진짜구멍.push(c);
+        }
+        if (filled.length < HOLE_MIN_FILLED) continue;   // 원래 비어있는 행
+        if (!진짜구멍.length && !수기값.length) continue;
+        if (!holeAllowed_(branch, tabName, r + 1)) continue;   // 대상 밖
+
+        var label = String(labels[r][0] || '').trim();
+        var 날짜표기 = function (c) { return colLetter_(c + 7) + '(' + (c + 1) + '일)'; };
+
+        if (수기값.length) {
+          Logger.log('  ⚠️ ' + tabName + ' ' + (r + 1) + '행 [' + label + '] — 손으로 넣은 값 ' +
+                     수기값.length + '칸: ' +
+                     수기값.map(function (c) { return 날짜표기(c) + '=' + vs[r][c]; }).join(', '));
+          Logger.log('        건드리지 않습니다. 수식으로 바꾸려면 직접 지우고 다시 실행하세요.');
+        }
+        if (!진짜구멍.length) continue;
+
+        Logger.log('  ' + tabName + ' ' + (r + 1) + '행 [' + label + '] — 빈 칸 ' +
+                   진짜구멍.length + '개: ' + 진짜구멍.map(날짜표기).join(', '));
+        총 += 진짜구멍.length;
+
+        if (!dryRun) {
+          var srcCol = filled[0] + 7;
+          진짜구멍.forEach(function (c) {
+            // PASTE_FORMULA 는 상대 참조(G$11 등)를 열에 맞춰 자동 보정한다
+            sh.getRange(r + 1, srcCol).copyTo(
+              sh.getRange(r + 1, c + 7),
+              SpreadsheetApp.CopyPasteType.PASTE_FORMULA, false);
+          });
+          SpreadsheetApp.flush();
+          Logger.log('      → 채움');
+        }
+      }
+    });
+  });
+
+  if (!총) { Logger.log('\n구멍 없음 ✅'); return; }
+  Logger.log(dryRun
+    ? '\n※ ' + 총 + '칸 채울 예정. 아무것도 바꾸지 않았습니다.'
+    : '\n✅ ' + 총 + '칸 채움');
+}
+
+function 분류정리_미리보기() { runRenamePlan_(true); }
+function 분류정리_적용()   { runRenamePlan_(false); }
+
+function runRenamePlan_(dryRun) {
+  Logger.log(dryRun ? '════ 미리보기 (변경 없음) ════' : '════ 실제 적용 ════');
+  RENAME_PLAN.forEach(function (p, i) {
+    Logger.log('\n[' + (i + 1) + '/' + RENAME_PLAN.length + '] ' + p.branch +
+               '  "' + p.from + '" → "' + p.to + '"   (' + p.비고 + ')');
+    renameCategory_(dryRun, p.branch, p.from, p.to);
+  });
+  Logger.log(dryRun
+    ? '\n※ 아무것도 바꾸지 않았습니다. 맞으면 분류정리_적용() 을 실행하세요.'
+    : '\n✅ 전부 완료 → 계정대조() 로 다시 확인하세요.');
+}
+
+function renameCategory_(dryRun, branch, FROM, TO) {
+  var ss = SpreadsheetApp.openById(BRANCH_CONFIG[branch].ssId);
+
+  // ① 로그 분류
+  var sh = ss.getSheetByName('지출및매출로그');
+  var 로그건수 = 0;
+  if (sh && sh.getLastRow() > 1) {
+    var rg = sh.getRange(2, 2, sh.getLastRow() - 1, 1);
+    var vals = rg.getValues();
+    vals.forEach(function (r, i) {
+      if (String(r[0]).trim() === FROM) { vals[i][0] = TO; 로그건수++; }
+    });
+    if (로그건수 && !dryRun) { rg.setValues(vals); SpreadsheetApp.flush(); }
+  }
+  if (로그건수) Logger.log('    ① 로그 ' + 로그건수 + '건');
+
+  // ② 월별탭 수식
+  var targets = ['26년 x월 손익계산서'];
+  for (var m = 1; m <= 12; m++) targets.push('26년 ' + m + '월 손익계산서');
+  var 수식건수 = 0;
+
+  targets.forEach(function (tabName) {
+    var t = ss.getSheetByName(tabName);
+    if (!t) return;
+    var lastRow = Math.min(t.getLastRow(), 60);
+    var lastCol = Math.min(t.getLastColumn(), 40);
+    if (lastRow < 1 || lastCol < 1) return;
+
+    // ⚠️ 절대 range.setFormulas(전체배열) 를 쓰지 말 것.
+    //    getFormulas() 는 값만 든 칸을 '' 로 돌려주는데, 그걸 되돌려 쓰면
+    //    직접 입력된 숫자가 전부 지워진다. (2026-08-17 사고)
+    //    바꿀 칸만 하나씩 setFormula 한다.
+    var fs = t.getRange(1, 1, lastRow, lastCol).getFormulas();
+    var 바꿀칸 = [];
+
+    for (var r = 0; r < fs.length; r++) {
+      for (var c = 0; c < fs[r].length; c++) {
+        var f = fs[r][c];
+        if (!f || f.indexOf('"' + FROM + '"') < 0) continue;
+        바꿀칸.push({ row: r + 1, col: c + 1,
+                     formula: f.split('"' + FROM + '"').join('"' + TO + '"') });
+      }
+    }
+    if (!바꿀칸.length) return;
+    Logger.log('    ② ' + tabName + ' 수식 ' + 바꿀칸.length + '칸');
+    수식건수 += 바꿀칸.length;
+
+    if (!dryRun) {
+      바꿀칸.forEach(function (x) { t.getRange(x.row, x.col).setFormula(x.formula); });
+      SpreadsheetApp.flush();
+    }
+  });
+
+  if (!로그건수 && !수식건수) Logger.log('    변경할 것 없음');
+}
+
+/**
+ * 처리 대기 중인 영수증이 몇 장인지
+ *
+ *   dailyProcess 는 구글이 6분에 강제 종료한다. 1장당 5~12초라
+ *   한 번에 30~45장이 한계다. 그 이상 쌓이면 며칠에 걸쳐 나눠 처리되고
+ *   그동안 손익계산서 숫자가 비어 있게 된다.
+ */
+function checkBacklog() {
+  var 총 = 0;
+  Object.keys(BRANCH_CONFIG).forEach(function (branch) {
+    var folder = DriveApp.getFolderById(BRANCH_CONFIG[branch].folderId);
+    var files = folder.getFiles();
+    var 대기 = 0, 확인요망 = 0, 완료 = 0;
+    while (files.hasNext()) {
+      var n = files.next().getName().trim();
+      if (n.startsWith('[완료]')) 완료++;
+      else if (n.startsWith('[확인요망]')) 확인요망++;
+      else 대기++;
+    }
+    총 += 대기;
+    Logger.log('[' + branch + ']  대기 ' + 대기 + '장 · 확인요망 ' + 확인요망 + '장 · 완료 ' + 완료 + '장');
+    if (확인요망 > 0) Logger.log('   ↳ retryFailedFiles() 로 재시도할 수 있습니다');
+  });
+
+  var 예상초 = 총 * 8;
+  Logger.log('\n대기 합계 ' + 총 + '장  →  예상 ' + Math.round(예상초 / 60) + '분');
+  if (예상초 > 300) {
+    Logger.log('⚠️ 6분 제한을 넘습니다. 오늘 다 못 하고 내일로 넘어갑니다.');
+    Logger.log('   → 하루 10장 이내로 올리시면 여유롭습니다.');
+  } else {
+    Logger.log('✅ 한 번에 처리 가능합니다.');
+  }
+}
+
 function 급여수식_미리보기() { fixPayrollFormulas_(true); }
 function 급여수식_적용()   { fixPayrollFormulas_(false); }
 
@@ -988,19 +1668,68 @@ function ensureHeaders(sheet) {
   }
 }
 
-function recordDataSafely(sheet, items, branchName, fileName, fileId) {
+// ─────────────────────────────────────────────────────────────
+// AI 응답 문지기
+//
+//  프롬프트로 "합계 행은 출력하지 마세요" 라고 해도 AI는 가끔 어긴다.
+//  실제로 마감정산서에서 '매출 합계' 가 기타잡비용으로 두 건 들어와,
+//  매출이 비용으로 잡혀 있었다. (2026-08-18 발견)
+//
+//  부탁이 아니라 코드로 막는다.
+// ─────────────────────────────────────────────────────────────
+
+// 합계·소계로 보이는 항목명 — 개별 항목이 이미 따로 들어오므로 중복이다
+var SUM_ROW_PATTERN = /합\s*계|소\s*계|총\s*액|total/i;
+
+// 문서 종류별로 허용되는 분류. 없으면 검사하지 않는다.
+var ALLOWED_CATEGORIES = {
+  '마감정산서': ['현금매출', '카드매출', '배달매출'],
+};
+
+/** 기록해도 되는 항목인지 판단. 문제가 있으면 사유를 돌려준다. */
+function rejectReason_(item, docType) {
+  var name = String(item.항목명 || '').trim();
+  var cat  = String(item.분류 || '').trim();
+
+  if (SUM_ROW_PATTERN.test(name)) return '합계 행 (개별 항목과 중복)';
+
+  var allow = ALLOWED_CATEGORIES[docType];
+  if (allow && allow.indexOf(cat) === -1) {
+    return docType + '에 없는 분류 "' + cat + '" (허용: ' + allow.join(', ') + ')';
+  }
+
+  // 날짜가 터무니없으면 사람이 봐야 한다
+  var y = Number(String(item.날짜 || '').slice(0, 4));
+  if (y && (y < 2024 || y > new Date().getFullYear() + 1)) {
+    return '날짜가 이상함 (' + item.날짜 + ')';
+  }
+  return null;
+}
+
+function recordDataSafely(sheet, items, branchName, fileName, fileId, docType) {
   var timestamp = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss");
-  var rows = [];
+  var rows = [], 거른것 = [];
+
   items.forEach(function(item) {
     var amount = parseInt(String(item.금액 || "0").replace(/[^0-9]/g, "")) || 0;
     if (amount === 0) return;
+
+    var 사유 = rejectReason_(item, docType);
+    if (사유) {
+      거른것.push('   ⛔ ' + (item.항목명 || '(무명)') + ' ' + amount.toLocaleString() + '원 — ' + 사유);
+      return;
+    }
+
     rows.push([item.날짜||"", item.분류||"기타", item.항목명||"", amount, branchName, fileName, timestamp, fileId||""]);
     Logger.log("   " + item.날짜 + " | " + item.분류 + " | " + amount.toLocaleString() + "원");
   });
-  if (rows.length === 0) return { success: false, count: 0 };
+
+  거른것.forEach(function(l) { Logger.log(l); });
+
+  if (rows.length === 0) return { success: false, count: 0, 거름: 거른것.length };
   rows.forEach(function(r) { sheet.appendRow(r); });
   SpreadsheetApp.flush();
-  return { success: true, count: rows.length };
+  return { success: true, count: rows.length, 거름: 거른것.length };
 }
 
 function isAlreadyProcessedById(sheet, fileId) {
@@ -1056,8 +1785,9 @@ function dailyProcess() {
     processFiles("백석점");
 
     // ── 고기값 / 주류·음료 원가 자동 동기화 (추가) ──
-    syncMeatCosts("백석점");
-    syncLiquorCosts("백석점");
+    // 최근 2개월만 — 전체를 매일 다시 쓰면 6분 제한을 잡아먹는다
+    syncMeatCosts("백석점", SYNC_RECENT_MONTHS);
+    syncLiquorCosts("백석점", SYNC_RECENT_MONTHS);
     // syncMeatCosts("원당점");   // 원당점 입고기록도 있으면 주석 해제
 
     Logger.log("=== 자동 처리 완료 ===");
@@ -1066,6 +1796,35 @@ function dailyProcess() {
   } finally {
     lock.releaseLock();
   }
+}
+
+// 구글이 6분에 스크립트를 강제 종료한다. 그 순간 처리 중이던 파일은
+// 이름이 안 바뀌어 다음 실행 때 다시 처리되지만, 로그가 끊겨 원인 파악이 어렵다.
+// 5분에서 스스로 멈추고 남은 장수를 남기면 상황이 명확해진다.
+var _RUN_START = null;
+var MAX_RUN_MS = 5 * 60 * 1000;
+
+// 매일 도는 동기화가 볼 기간 (개월). 과거는 이미 들어가 있고 바뀌지 않는다.
+var SYNC_RECENT_MONTHS = 2;
+
+/** 오늘로부터 n개월 전 1일의 yyyy-MM-dd. n 이 없으면 null(=전체) */
+function monthsAgoYmd_(n) {
+  if (!n) return null;
+  var d = new Date();
+  d.setMonth(d.getMonth() - n);
+  d.setDate(1);
+  return Utilities.formatDate(d, TIMEZONE, 'yyyy-MM-dd');
+}
+
+/**
+ * 입고기록·식자재발주를 소급 수정했을 때만 손으로 실행
+ *   과거 전체를 다시 맞춘다. 몇 분 걸릴 수 있다.
+ */
+function 원가_전체동기화() {
+  Logger.log('=== 전체 기간 재동기화 (수동) ===');
+  syncMeatCosts('백석점');
+  syncLiquorCosts('백석점');
+  Logger.log('=== 완료 ===');
 }
 
 function processFiles(branchName) {
@@ -1078,12 +1837,20 @@ function processFiles(branchName) {
   var logSheet = ss.getSheetByName("지출및매출로그") || ss.insertSheet("지출및매출로그");
   ensureHeaders(logSheet);
 
-  var processed = 0, skipped = 0, errors = 0;
+  var processed = 0, skipped = 0, errors = 0, 남음 = 0;
   var files = folder.getFiles();
+  if (!_RUN_START) _RUN_START = new Date().getTime();
 
   while (files.hasNext()) {
     var file = files.next();
     var name = file.getName().trim();
+
+    // 시간이 다 되면 멈춘다. 처리한 파일은 이미 [완료]로 바뀌어 있어
+    // 다음 실행이 이어서 한다. 손실은 없고 지연만 생긴다.
+    if (new Date().getTime() - _RUN_START > MAX_RUN_MS) {
+      if (!name.startsWith("[완료]") && !name.startsWith("[확인요망]")) 남음++;
+      continue;
+    }
 
     if (name.startsWith("[완료]") || name.startsWith("[확인요망]")) { skipped++; continue; }
     if (!file.getMimeType().startsWith("image/")) continue;
@@ -1102,7 +1869,7 @@ function processFiles(branchName) {
       var res = callGeminiWithDocType(imageData, docType);
       if (!res || res.length === 0) { safeRename(file, "[확인요망] AI분석실패_" + name); errors++; continue; }
 
-      var result = recordDataSafely(logSheet, res, branchName, name, file.getId());
+      var result = recordDataSafely(logSheet, res, branchName, name, file.getId(), docType);
       if (result.success) { safeRename(file, "[완료] " + name); processed++; }
       else { safeRename(file, "[확인요망] 기록실패_" + name); errors++; }
     } catch (e) {
@@ -1112,6 +1879,10 @@ function processFiles(branchName) {
   }
 
   Logger.log("✅ 성공: " + processed + " | ⏭ 스킵: " + skipped + " | ❌ 오류: " + errors);
+  if (남음 > 0) {
+    Logger.log("⏳ 시간 초과로 " + 남음 + "장을 남겼습니다 — 내일 새벽 2시에 이어서 처리됩니다.");
+    Logger.log("   매일 조금씩(10장 이내) 올리시면 이런 일이 없습니다.");
+  }
 }
 
 
@@ -1697,8 +2468,18 @@ function upsertLogEntry(logSheet, ymd, category, itemName, amount, branch, marke
  * ⚠️ 주의: 이전에 월별탭 셀에 직접 쓴 값이 있으면 SUMIF와 충돌할 수 있음
  *         → 월별탭 "고기값" 행의 직접 입력값은 수동으로 지워야 함
  */
-function syncMeatCosts(branchName) {
-  Logger.log('\n--- [' + branchName + '] 고기값 동기화 시작 (→ 지출및매출로그) ---');
+/**
+ * @param {number} [months] 최근 몇 개월만 볼지. 생략하면 전체.
+ *
+ *   매일 도는 자동 실행이 5월치까지 매번 다시 쓰고 있었다.
+ *   덮어쓰기라 결과는 같지만 시트 쓰기가 느려 6분 제한을 잡아먹는다.
+ *   과거는 이미 들어가 있고 바뀔 일도 없으니 최근 것만 본다.
+ *   입고기록을 소급 수정했을 때만 고기값_전체동기화() 를 손으로 실행.
+ */
+function syncMeatCosts(branchName, months) {
+  var 기준 = monthsAgoYmd_(months);
+  Logger.log('\n--- [' + branchName + '] 고기값 동기화 시작' +
+             (기준 ? ' (' + 기준 + ' 이후)' : ' (전체)') + ' ---');
 
   var stockSS = SpreadsheetApp.openById(STOCK_SS_ID);
   var inSheet = stockSS.getSheetByName('입고기록');
@@ -1725,6 +2506,7 @@ function syncMeatCosts(branchName) {
 
     var parsed = parseMeatDateStr(dateStr);
     if (!parsed) { Logger.log('날짜 파싱 실패: ' + dateStr); continue; }
+    if (기준 && parsed.ymd < 기준) continue;   // 오래된 건 건너뛴다
 
     var extras = extrasStr
       ? extrasStr.split(',').map(function(s) { return s.trim(); }).filter(Boolean)
@@ -1768,8 +2550,11 @@ function syncMeatCosts(branchName) {
  * ⚠️ D열에 수량 정보가 있어야 금액 계산됨.
  *    수량이 없으면 0원 → 로그 기록 건너뜀.
  */
-function syncLiquorCosts(branchName) {
-  Logger.log('\n--- [' + branchName + '] 주류·음료 동기화 시작 (→ 지출및매출로그) ---');
+/** @param {number} [months] 최근 몇 개월만. 생략하면 전체. (syncMeatCosts 와 동일) */
+function syncLiquorCosts(branchName, months) {
+  var 기준 = monthsAgoYmd_(months);
+  Logger.log('\n--- [' + branchName + '] 주류·음료 동기화 시작' +
+             (기준 ? ' (' + 기준 + ' 이후)' : ' (전체)') + ' ---');
 
   var stockSS = SpreadsheetApp.openById(STOCK_SS_ID);
   var sheet   = stockSS.getSheetByName('식자재발주');
@@ -1811,6 +2596,7 @@ function syncLiquorCosts(branchName) {
         Logger.log('날짜 파싱 실패: ' + dateVal); continue;
       }
     }
+    if (기준 && ymd < 기준) continue;   // 오래된 건 건너뛴다
 
     // body 파싱: "[백석점 발주 ...]\n품목 수량, ..." 또는 "품목 수량, ..." 두 형식 모두 처리
     var itemLine;
