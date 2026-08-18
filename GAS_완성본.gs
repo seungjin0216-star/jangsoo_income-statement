@@ -624,35 +624,48 @@ function 계정대조() {
       });
     }
 
-    // ② 시트 수식이 참조하는 분류 (최근 월 탭 기준)
-    var tab = null;
-    for (var m = 12; m >= 1; m--) {
-      var t = ss.getSheetByName('26년 ' + m + '월 손익계산서');
-      if (t) { tab = t; break; }
-    }
-    if (!tab) { Logger.log('  월 탭 없음'); return; }
-    Logger.log('기준 탭: ' + tab.getName());
-
+    // ② 시트 수식이 참조하는 분류
+    //
+    //   월 탭 하나만 보면 안 된다. 달마다 상태가 다르기 때문이다.
+    //   예) 8월은 급여가 아직 안 들어와 수기값으로 보호돼 있지만
+    //       5·6·7월은 이미 로그를 읽고 있다.
+    //   한 탭만 보면 "인건비를 안 읽는다"는 잘못된 경고가 뜬다.
+    //   → 템플릿과 모든 월 탭을 훑어서, 어디서든 쓰이면 연결된 것으로 본다.
     var 참조 = {};   // 분류 → 그 분류를 쓰는 행 라벨
-    var lastRow = Math.min(tab.getLastRow(), 60);
-    var fs = tab.getRange(1, 1, lastRow, Math.min(tab.getLastColumn(), 40)).getFormulas();
-    var labels = tab.getRange(1, 2, lastRow, 1).getDisplayValues();
+    var 훑은탭 = [];
     var re = /'지출및매출로그'!\$B:\$B\s*,\s*"([^"]+)"/g;
 
-    for (var r = 0; r < fs.length; r++) {
-      for (var c = 0; c < fs[r].length; c++) {
-        var f = fs[r][c];
-        if (!f) continue;
-        var mm;
-        re.lastIndex = 0;
-        while ((mm = re.exec(f)) !== null) {
-          var cat = mm[1];
-          var lab = String(labels[r][0] || '').trim();
-          if (!참조[cat]) 참조[cat] = {};
-          if (lab) 참조[cat][lab] = true;
+    var tabNames = ['26년 x월 손익계산서'];
+    for (var m = 1; m <= 12; m++) tabNames.push('26년 ' + m + '월 손익계산서');
+
+    tabNames.forEach(function (tabName) {
+      var tab = ss.getSheetByName(tabName);
+      if (!tab) return;
+      훑은탭.push(tabName.replace('26년 ', '').replace(' 손익계산서', ''));
+
+      var lastRow = Math.min(tab.getLastRow(), 60);
+      if (lastRow < 1) return;
+      var fs = tab.getRange(1, 1, lastRow, Math.min(tab.getLastColumn(), 40)).getFormulas();
+      var labels = tab.getRange(1, 2, lastRow, 1).getDisplayValues();
+
+      for (var r = 0; r < fs.length; r++) {
+        for (var c = 0; c < fs[r].length; c++) {
+          var f = fs[r][c];
+          if (!f) continue;
+          var mm;
+          re.lastIndex = 0;
+          while ((mm = re.exec(f)) !== null) {
+            var cat = mm[1];
+            var lab = String(labels[r][0] || '').trim();
+            if (!참조[cat]) 참조[cat] = {};
+            if (lab) 참조[cat][lab] = true;
+          }
         }
       }
-    }
+    });
+
+    if (!훑은탭.length) { Logger.log('  월 탭 없음'); return; }
+    Logger.log('훑은 탭: ' + 훑은탭.join(' · '));
 
     // ③ 대조
     Logger.log('\n── 🔴 로그에 있는데 시트가 안 읽는 분류 ──');
@@ -733,13 +746,16 @@ var RENAME_PLAN = [
   { branch: '백석점', from: '기타 잡비용', to: '기타잡비용', 비고: '공백 통합' },
   { branch: '백석점', from: '특양',        to: DUP_EXCLUDE,  비고: '카드에 이미 포함 — 집계 제외' },
 
-  // ── 원당은 백석 양식이 완성된 뒤에 ──────────────────────
-  // 계정대조 결과 미집계 19,829,567원. 아래가 확인되면 주석을 푼다.
-  //   기타 잡비용 12,311,940원  공백만 다름 — 바로 통합 가능
-  //   특양           224,400원  카드 포함 여부 미확인 (원당은 '가게외부카드' 계정이 따로 있음)
-  //   인건비       7,119,000원  급여수식_적용 으로 해결 (이름 문제 아님)
-  // { branch: '원당점', from: '기타 잡비용', to: '기타잡비용', 비고: '공백 통합' },
-  // { branch: '원당점', from: '특양',        to: DUP_EXCLUDE,  비고: '카드 포함 여부 확인 필요' },
+  { branch: '원당점', from: '기타 잡비용', to: '기타잡비용', 비고: '공백 통합' },
+
+  // ── 원당 특양 224,400원 — 답은 나왔고 실행만 남음 ──────
+  //
+  //   2026-08-18 확인: "그때는 카드결제 중복으로 했다" (대표님)
+  //   → 백석과 같은 구조. 카드 결제액에 이미 포함돼 있으므로 집계에서 빼야 한다.
+  //   → 아래 한 줄 주석만 풀고 분류정리_적용() 하면 끝.
+  //
+  //   1건 224,400원이라 급하지 않아 그날은 넘어갔다.
+  // { branch: '원당점', from: '특양', to: DUP_EXCLUDE, 비고: '카드 결제 중복 — 집계 제외' },
 ];
 
 /**
@@ -1788,6 +1804,9 @@ function dailyProcess() {
     // 최근 2개월만 — 전체를 매일 다시 쓰면 6분 제한을 잡아먹는다
     syncMeatCosts("백석점", SYNC_RECENT_MONTHS);
     syncLiquorCosts("백석점", SYNC_RECENT_MONTHS);
+
+    // 알바 데이터 스냅샷 — 알바 시트 A1 이 날아가도 되돌릴 수 있게
+    알바데이터_백업();
     // syncMeatCosts("원당점");   // 원당점 입고기록도 있으면 주석 해제
 
     Logger.log("=== 자동 처리 완료 ===");
@@ -2967,6 +2986,125 @@ function syncLaborCostsForMonth() {
   var YM = '2026-08';          // ← 넣고 싶은 달
   syncLaborCosts('백석점', YM);
   syncLaborCosts('원당점', YM);
+}
+
+
+// ═══════════════════════════════════════════════════════════
+// 알바 데이터 자동 백업
+//
+//  알바계산기는 데이터를 시트 한 칸(A1)에 JSON 통째로 넣습니다.
+//  그 칸이 지워지거나 빈 값으로 덮이면 전부 사라집니다.
+//  알바 백엔드에는 동시저장 보호도 데이터 검증도 없습니다.
+//
+//  그래서 매일 한 번 받아서 여기에 쌓아둡니다.
+//  알바 쪽 코드는 하나도 건드리지 않습니다. 읽기만 합니다.
+//
+//  구글 시트 한 칸은 5만 자까지라, 커지면 여러 칸에 나눠 담습니다.
+// ═══════════════════════════════════════════════════════════
+var ALBA_BACKUP_TAB  = '알바백업';
+var ALBA_BACKUP_KEEP = 60;      // 보관할 스냅샷 개수 (약 2개월)
+var CHUNK_SIZE       = 45000;   // 한 칸에 담을 글자 수
+var CHUNK_COLS       = 5;       // 최대 칸 수 → 22만 자까지
+
+function albaBackupSheet_() {
+  var ss = SpreadsheetApp.openById(BRANCH_CONFIG['백석점'].ssId);
+  var sh = ss.getSheetByName(ALBA_BACKUP_TAB);
+  if (!sh) {
+    sh = ss.insertSheet(ALBA_BACKUP_TAB);
+    sh.appendRow(['백업시각', '지점', '알바', '지급', '글자수',
+                  'JSON1', 'JSON2', 'JSON3', 'JSON4', 'JSON5']);
+    sh.getRange(1, 1, 1, 10).setFontWeight('bold').setBackground('#dcfce7');
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+/** 지금 알바 데이터를 받아 한 줄 쌓는다 */
+function 알바데이터_백업() {
+  var raw;
+  try {
+    raw = UrlFetchApp.fetch(ALBA_SCRIPT_URL + '?t=' + Date.now(),
+                            { muteHttpExceptions: true }).getContentText();
+  } catch (e) { Logger.log('❌ 알바계산기 호출 실패: ' + e.message); return; }
+
+  var j;
+  try { j = JSON.parse(raw); }
+  catch (e) { Logger.log('❌ 응답 파싱 실패: ' + raw.slice(0, 200)); return; }
+  if (!j.ok || !j.data) { Logger.log('❌ 데이터 없음'); return; }
+
+  var d = j.data;
+  var 알바수 = (d.workers || []).length;
+
+  // 빈 데이터를 백업하면 나중에 그걸로 복원했다가 진짜로 날아간다
+  if (!알바수) { Logger.log('⚠️ 알바가 0명 — 백업하지 않습니다'); return; }
+
+  var text = JSON.stringify(d);
+  if (text.length > CHUNK_SIZE * CHUNK_COLS) {
+    Logger.log('⚠️ 너무 큽니다 (' + text.length.toLocaleString() + '자) — CHUNK_COLS 를 늘리세요');
+    return;
+  }
+
+  var sh = albaBackupSheet_();
+
+  // 직전과 같으면 안 쌓는다 (같은 내용이 매일 늘어나는 것 방지)
+  var last = sh.getLastRow();
+  if (last > 1) {
+    var prev = '';
+    for (var c = 6; c < 6 + CHUNK_COLS; c++) prev += String(sh.getRange(last, c).getValue() || '');
+    if (prev === text) { Logger.log('변경 없음 — 건너뜀'); return; }
+  }
+
+  var row = [
+    Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd HH:mm:ss'),
+    (d.branches || []).length, 알바수, (d.payments || []).length, text.length,
+  ];
+  for (var i = 0; i < CHUNK_COLS; i++) row.push(text.substr(i * CHUNK_SIZE, CHUNK_SIZE));
+  sh.appendRow(row);
+
+  var over = sh.getLastRow() - 1 - ALBA_BACKUP_KEEP;
+  if (over > 0) sh.deleteRows(2, over);
+
+  SpreadsheetApp.flush();
+  Logger.log('💾 알바 백업 — 알바 ' + 알바수 + '명 · 지급 ' + (d.payments || []).length +
+             '건 · ' + text.length.toLocaleString() + '자');
+}
+
+/** 쌓인 백업 목록 */
+function 알바백업_목록() {
+  var sh = albaBackupSheet_();
+  var last = sh.getLastRow();
+  if (last < 2) { Logger.log('백업 없음'); return; }
+
+  Logger.log('═══ 알바 백업 (' + (last - 1) + '개) ═══');
+  sh.getRange(2, 1, last - 1, 5).getValues().forEach(function (r, i) {
+    Logger.log('  ' + (i + 2) + '행 | ' + r[0] + ' | 지점 ' + r[1] +
+               ' · 알바 ' + r[2] + '명 · 지급 ' + r[3] + '건 · ' +
+               Number(r[4]).toLocaleString() + '자');
+  });
+  Logger.log('\n※ 되돌리려면 알바백업_복원용출력() 안의 행번호를 바꿔 실행하세요.');
+}
+
+/**
+ * 특정 백업의 JSON 을 로그에 찍는다 (수동 복원용)
+ *   복사해서 알바 시트 「알바비데이터」 A1 에 붙여넣으면 그 시점으로 돌아갑니다.
+ *   자동으로 되돌리지 않는 이유 — 실수로 최신 데이터를 덮어쓰는 게 더 무섭습니다.
+ */
+function 알바백업_복원용출력() {
+  var 행번호 = 0;   // 0 이면 가장 최근 것
+
+  var sh = albaBackupSheet_();
+  var last = sh.getLastRow();
+  if (last < 2) { Logger.log('백업 없음'); return; }
+  var r = 행번호 || last;
+
+  var meta = sh.getRange(r, 1, 1, 5).getValues()[0];
+  var text = '';
+  for (var c = 6; c < 6 + CHUNK_COLS; c++) text += String(sh.getRange(r, c).getValue() || '');
+
+  Logger.log('═══ ' + meta[0] + ' 백업 ═══');
+  Logger.log('알바 ' + meta[2] + '명 · 지급 ' + meta[3] + '건\n');
+  Logger.log('아래를 통째로 복사 → 알바 시트 「알바비데이터」 A1 에 붙여넣기\n');
+  Logger.log(text);
 }
 
 /**
