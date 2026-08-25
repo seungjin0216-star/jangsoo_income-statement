@@ -3948,3 +3948,138 @@ function fixLaborCostFormulas() {
 
   Logger.log('\n=== fixLaborCostFormulas 완료 ===');
 }
+
+
+// ════════════════════════════════════════════════════════════
+// 🔍 양식대조 — 백석과 원당의 월별 시트를 나란히 놓고 다른 곳 찾기
+//
+//  왜 필요한가 (2026-08-25)
+//    영수증을 읽는 코드는 두 지점이 이미 같은 것을 씁니다 (BRANCH_CONFIG).
+//    다른 것은 **시트 안의 수식**입니다.
+//    백석은 여러 번 손봐서 자리를 잡았는데 원당은 손댄 적이 거의 없습니다.
+//
+//  ⚠️ 읽기만 합니다. 아무것도 고치지 않습니다.
+//     "백석 기준으로 싹 덮기" 를 하면 원당에만 있는 값이 날아갑니다.
+//     2026-08-17 에 백석에서 그렇게 9개월치를 날린 적이 있습니다.
+//     무엇이 다른지 다 본 뒤에 하나씩 판단하는 것이 순서입니다.
+//
+//  실행: 편집기에서 양식대조() 선택 → 실행 → 로그 확인
+// ════════════════════════════════════════════════════════════
+
+var 대조_기준지점 = '백석점';    // 이쪽을 기준으로 본다
+var 대조_대상지점 = '원당점';
+var 대조_탭목록   = [];          // 비워두면 템플릿 + 1~12월 전부
+
+function 양식대조() {
+  var 기준ss = SpreadsheetApp.openById(BRANCH_CONFIG[대조_기준지점].ssId);
+  var 대상ss = SpreadsheetApp.openById(BRANCH_CONFIG[대조_대상지점].ssId);
+
+  var tabs = 대조_탭목록.length ? 대조_탭목록 : (function () {
+    var t = ['26년 x월 손익계산서'];
+    for (var m = 1; m <= 12; m++) t.push('26년 ' + m + '월 손익계산서');
+    return t;
+  })();
+
+  Logger.log('════════════════════════════════════════');
+  Logger.log('기준: ' + 대조_기준지점 + '  /  대상: ' + 대조_대상지점);
+  Logger.log('※ 읽기만 합니다. 고치지 않습니다.');
+  Logger.log('════════════════════════════════════════');
+
+  var 전체차이 = 0;
+
+  tabs.forEach(function (tabName) {
+    var a = 기준ss.getSheetByName(tabName);
+    var b = 대상ss.getSheetByName(tabName);
+
+    if (!a && !b) return;                 // 둘 다 없으면 조용히 넘어간다
+    if (!a) { Logger.log('\n[' + tabName + '] ⚠️ ' + 대조_기준지점 + '에 없음'); return; }
+    if (!b) { Logger.log('\n[' + tabName + '] ⚠️ ' + 대조_대상지점 + '에 없음 — 탭을 만들어야 합니다'); 전체차이++; return; }
+
+    var 기준 = 행정보_(a);
+    var 대상 = 행정보_(b);
+
+    var 기준만 = [], 대상만 = [], 수식다름 = [], 구멍 = [];
+
+    Object.keys(기준).forEach(function (label) {
+      if (!대상[label]) { 기준만.push(기준[label]); return; }
+      var x = 기준[label], y = 대상[label];
+
+      // ① 월 합계(C열) 수식이 다른가
+      if (정리_(x.c) !== 정리_(y.c)) {
+        수식다름.push({ label: label, 기준행: x.row, 대상행: y.row, 기준: x.c, 대상: y.c });
+      }
+      // ② 일별(G~AK) 수식이 몇 칸 차 있는가
+      //    백석은 차 있는데 원당은 비어 있으면 그 날짜 지출이 조용히 누락된다.
+      if (x.일별 >= 25 && y.일별 < x.일별 - 2) {
+        구멍.push({ label: label, 대상행: y.row, 기준: x.일별, 대상: y.일별 });
+      }
+    });
+    Object.keys(대상).forEach(function (label) {
+      if (!기준[label]) 대상만.push(대상[label]);
+    });
+
+    var 차이 = 기준만.length + 대상만.length + 수식다름.length + 구멍.length;
+    if (!차이) return;                    // 같으면 안 찍는다. 다른 것만 봐야 한다.
+    전체차이 += 차이;
+
+    Logger.log('\n════════ ' + tabName + ' ════════');
+
+    if (기준만.length) {
+      Logger.log('\n📋 ' + 대조_기준지점 + '에만 있는 행 (' + 기준만.length + ')');
+      기준만.forEach(function (r) { Logger.log('   ' + r.row + '행  ' + r.label); });
+    }
+    if (대상만.length) {
+      Logger.log('\n📋 ' + 대조_대상지점 + '에만 있는 행 (' + 대상만.length + ')');
+      대상만.forEach(function (r) { Logger.log('   ' + r.row + '행  ' + r.label); });
+    }
+    if (수식다름.length) {
+      Logger.log('\n📐 월합계(C열) 수식이 다름 (' + 수식다름.length + ')');
+      수식다름.forEach(function (d) {
+        Logger.log('   [' + d.label + ']  ' + 대조_기준지점 + ' ' + d.기준행 + '행 / ' + 대조_대상지점 + ' ' + d.대상행 + '행');
+        Logger.log('      ' + 대조_기준지점 + ': ' + (d.기준 || '(비어 있음)'));
+        Logger.log('      ' + 대조_대상지점 + ': ' + (d.대상 || '(비어 있음)'));
+      });
+    }
+    if (구멍.length) {
+      Logger.log('\n🕳 일별 수식에 구멍 (' + 구멍.length + ') — 그 날짜 지출이 조용히 누락됩니다');
+      구멍.forEach(function (d) {
+        Logger.log('   [' + d.label + '] ' + d.대상행 + '행  ' +
+                   대조_기준지점 + ' ' + d.기준 + '칸 / ' + 대조_대상지점 + ' ' + d.대상 + '칸');
+      });
+    }
+  });
+
+  Logger.log('\n════════════════════════════════════════');
+  if (!전체차이) Logger.log('✅ 다른 곳이 없습니다');
+  else Logger.log('총 ' + 전체차이 + '군데가 다릅니다. 하나씩 판단해서 고치세요.');
+  Logger.log('════════════════════════════════════════');
+}
+
+/** 한 탭에서 B열 라벨 → {row, label, c(월합계 수식), 일별(G~AK 중 찬 칸 수)} */
+function 행정보_(sheet) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return {};
+  var lastCol = Math.min(sheet.getLastColumn(), 37);   // AK = 37
+
+  var vals = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+  var fs   = sheet.getRange(1, 1, lastRow, lastCol).getFormulas();
+
+  var out = {};
+  for (var r = 0; r < lastRow; r++) {
+    var label = String(vals[r][1] || '').replace(/\s/g, '').trim();   // B열, 공백 무시
+    if (!label) continue;
+    if (out[label]) continue;                                        // 같은 라벨이 또 나오면 첫 것만
+
+    var 일별 = 0;
+    for (var c = 6; c < lastCol; c++) {                              // G(7번째) ~ AK
+      if (fs[r][c]) 일별++;
+    }
+    out[label] = { row: r + 1, label: String(vals[r][1]).trim(), c: fs[r][2] || '', 일별: 일별 };
+  }
+  return out;
+}
+
+/** 수식 비교용 정리 — 공백·대소문자만 다른 것은 같은 것으로 본다 */
+function 정리_(f) {
+  return String(f || '').replace(/\s+/g, '').toUpperCase();
+}
