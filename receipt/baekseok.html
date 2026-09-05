@@ -67,17 +67,20 @@ body{font-family:-apple-system,"Helvetica Neue",sans-serif;background:var(--bg);
   </div>
 </div>
 <div class="wrap">
-<div class="sec-lbl">① 문서 유형 선택</div>
+<!-- ⚠️ 2026-09-04 백석 계정 정리 (사장님 지정)
+     사진으로 올릴 것 넷 · 금액만 적을 것 셋. 그 외는 뺐습니다.
+       사진   매출(마감정산서) · 미락 · 매장관리비 · 가스사용료
+       금액   가게카드 · 콩나물 · 광고비
+     한 달에 한 번만 적는 것은 사진보다 금액이 편하다는 판단입니다. -->
+<div class="sec-lbl">① 사진으로 올릴 것 — 유형 선택</div>
 <div class="doc-grid">
-  <button class="doc-btn" onclick="sel(this,'마감정산서')"><span class="btn-emoji">📊</span><span class="btn-lbl">마감정산서</span></button>
+  <button class="doc-btn" onclick="sel(this,'마감정산서')"><span class="btn-emoji">📊</span><span class="btn-lbl">매출<br><small style="font-weight:400;opacity:.6">마감정산서</small></span></button>
   <button class="doc-btn" onclick="sel(this,'미락')"><span class="btn-emoji">🧾</span><span class="btn-lbl">미락</span></button>
-  <button class="doc-btn" onclick="sel(this,'콩나물')"><span class="btn-emoji">🌾</span><span class="btn-lbl">콩나물</span></button>
-  <button class="doc-btn" onclick="sel(this,'관리비')"><span class="btn-emoji">🏢</span><span class="btn-lbl">관리비</span></button>
-  <button class="doc-btn" onclick="sel(this,'가스')"><span class="btn-emoji">🔥</span><span class="btn-lbl">가스</span></button>
-  <button class="doc-btn" onclick="sel(this,'카드값')"><span class="btn-emoji">💳</span><span class="btn-lbl">카드값</span></button>
+  <button class="doc-btn" onclick="sel(this,'관리비')"><span class="btn-emoji">🏢</span><span class="btn-lbl">매장관리비</span></button>
+  <button class="doc-btn" onclick="sel(this,'가스')"><span class="btn-emoji">🔥</span><span class="btn-lbl">가스사용료</span></button>
 </div>
 
-<div class="sec-lbl">② 사진 촬영 / 선택</div>
+<div class="sec-lbl">사진 촬영 / 선택</div>
 <div class="photo-box" id="photoBox" onclick="document.getElementById('fileInput').click()">
   <div class="ph-icon">📷</div>
   <div class="ph-txt" id="phTxt">여기를 눌러 사진 선택</div>
@@ -88,10 +91,32 @@ body{font-family:-apple-system,"Helvetica Neue",sans-serif;background:var(--bg);
 <button id="addBtn" class="add-btn" onclick="addToQueue()" disabled>+ 목록에 추가</button>
 
 <div class="queue-wrap" id="queueWrap" style="display:none">
-  <div class="sec-lbl" style="margin-top:20px">③ 업로드 목록</div>
+  <div class="sec-lbl" style="margin-top:20px">업로드 목록</div>
   <div id="queueList"></div>
 </div>
 <button id="submitBtn" class="submit-btn" onclick="submitAll()" disabled>모두 제출하기</button>
+
+<!-- ── 영수증이 없는 지출 (2026-09-02 추가) ──────────────────────
+     당근 광고비처럼 충전식이라 받을 영수증이 없는 것들을 위한 칸입니다.
+     사진 없이 계정 고르고 금액만 적어 보냅니다. -->
+<div class="sec-lbl" style="margin-top:28px">② 금액만 적을 것</div>
+<div style="font-size:13px;color:#8b94a7;margin:-6px 0 12px">한 달에 한 번쯤 넣는 것들 · 사진 필요 없음</div>
+<div class="doc-grid" id="dirGrid">
+  <button class="doc-btn" onclick="dirSel(this,'가게카드')"><span class="btn-emoji">💳</span><span class="btn-lbl">가게카드</span></button>
+  <button class="doc-btn" onclick="dirSel(this,'콩나물')"><span class="btn-emoji">🌾</span><span class="btn-lbl">콩나물</span></button>
+  <button class="doc-btn" onclick="dirSel(this,'광고비')"><span class="btn-emoji">📣</span><span class="btn-lbl">광고비</span></button>
+</div>
+<div style="display:flex;gap:8px;margin-top:12px">
+  <input id="dirAmt" type="number" inputmode="numeric" placeholder="금액 (원)"
+         oninput="dirChk()"
+         style="flex:2;padding:14px;border-radius:12px;border:1px solid #2b3245;background:#161b28;color:#e8ecf4;font-size:17px">
+  <input id="dirDate" type="date" onchange="dirChk()"
+         style="flex:1.2;padding:14px;border-radius:12px;border:1px solid #2b3245;background:#161b28;color:#e8ecf4;font-size:15px">
+</div>
+<input id="dirMemo" type="text" placeholder="메모 (선택) — 예: 당근 충전"
+       style="width:100%;margin-top:8px;padding:12px;border-radius:12px;border:1px solid #2b3245;background:#161b28;color:#e8ecf4;font-size:15px">
+<button id="dirBtn" class="add-btn" onclick="dirSend()" disabled style="margin-top:10px">기록하기</button>
+
 <div class="status" id="status">
   <div class="s-icon" id="sIcon"></div>
   <div class="s-txt" id="sTxt"></div>
@@ -102,6 +127,50 @@ body{font-family:-apple-system,"Helvetica Neue",sans-serif;background:var(--bg);
 var GAS_URL="https://script.google.com/macros/s/AKfycbxvvTbp_Wf-zvQ6e17dE2vKsaXdSSTV9vv5RUSPrTc44IxzNPfFJIgQEs944MEYY1WN/exec";
 var STORE="백석점";
 var _docType="",_b64="",_mime="",_fname="",_queue=[],_running=false;
+
+/* ── 영수증 없이 금액만 넣기 (2026-09-02) ──────────────────────
+   당근 광고비는 충전식이라 영수증이 없습니다.
+   수기로 시트에 적으면 결국 안 하게 되므로 앱에서 두 번 눌러 끝나게 만들었습니다.
+
+   ⚠️ no-cors 로 보내므로 서버 답을 읽을 수 없습니다.
+      「같은 날 같은 금액이 이미 있음」 경고는 GAS 실행 로그와 시트에만 남습니다. */
+var _dirCat="";
+document.addEventListener("DOMContentLoaded",function(){
+  var d=document.getElementById("dirDate");
+  if(d) d.value=new Date().toLocaleDateString("sv-SE");   // sv-SE = YYYY-MM-DD
+});
+function dirSel(btn,cat){
+  document.querySelectorAll("#dirGrid .doc-btn").forEach(function(b){b.classList.remove("sel")});
+  btn.classList.add("sel"); _dirCat=cat; dirChk();
+}
+function dirChk(){
+  var amt=parseInt(document.getElementById("dirAmt").value||"0",10);
+  var dt=document.getElementById("dirDate").value;
+  document.getElementById("dirBtn").disabled=!(_dirCat&&amt>0&&dt);
+}
+function dirSend(){
+  var amt=parseInt(document.getElementById("dirAmt").value||"0",10);
+  var dt=document.getElementById("dirDate").value;
+  var memo=document.getElementById("dirMemo").value;
+  if(!_dirCat||!(amt>0)||!dt)return;
+  var btn=document.getElementById("dirBtn");
+  btn.disabled=true; btn.textContent="보내는 중...";
+  showStatus("⏳","기록 중...",_dirCat+" "+amt.toLocaleString()+"원");
+  fetch(GAS_URL,{
+    method:"POST",mode:"no-cors",
+    headers:{"Content-Type":"text/plain;charset=utf-8"},
+    body:JSON.stringify({action:"direct",store:STORE,분류:_dirCat,금액:amt,날짜:dt,항목명:memo})
+  }).then(function(){
+    showStatus("✅","기록했습니다",dt+"  "+_dirCat+"  "+amt.toLocaleString()+"원");
+    document.getElementById("dirAmt").value="";
+    document.getElementById("dirMemo").value="";
+    document.querySelectorAll("#dirGrid .doc-btn").forEach(function(b){b.classList.remove("sel")});
+    _dirCat=""; btn.textContent="기록하기"; dirChk();
+  }).catch(function(e){
+    showStatus("❌","오류",e.message||String(e));
+    btn.disabled=false; btn.textContent="기록하기";
+  });
+}
 function sel(btn,type){
   document.querySelectorAll(".doc-btn").forEach(function(b){b.classList.remove("sel")});
   btn.classList.add("sel");_docType=type;chk();

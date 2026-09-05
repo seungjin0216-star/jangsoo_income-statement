@@ -1561,6 +1561,11 @@ function doPost(e) {
   try {
     var data    = JSON.parse(e.postData.contents);
 
+    // ── 사진 없이 금액만 직접 넣기 ─────────────────────────
+    //    당근 광고비처럼 「충전식」이라 영수증이 없는 것들을 위한 통로입니다.
+    //    앱에서 계정을 고르고 금액을 적어 보내면 로그에 한 줄 들어갑니다.
+    if (data.action === 'direct') return 직접입력_(data);
+
     // ── 직원 관리 요청 라우팅 ──────────────────────────────
     // 기존 영수증 앱은 action 없이 보내므로 아래 분기를 타지 않는다.
     // 즉 이 코드를 추가해도 영수증 업로드는 지금과 똑같이 동작한다.
@@ -1865,9 +1870,63 @@ function rejectReason_(item, docType) {
   return null;
 }
 
+/**
+ * 이미 시트에 있는 것을 다시 넣지 않기 위한 열쇠 꾸러미
+ *
+ * ⚠️ 왜 파일 이름이 아니라 「내용」으로 판단하나 (2026-08-31)
+ *
+ *   예전에는 파일 이름만 비교했습니다. 그런데 사진을 여러 장 한꺼번에 올리면
+ *   이름이 초 단위라 똑같아집니다. 그러면 첫 장만 들어가고 나머지는
+ *   「이미 했다」며 [완료] 딱지만 붙은 채 사라졌습니다.
+ *   원당 넉 달치 매출 1억 8천만원이 그렇게 안 잡혔습니다.
+ *
+ *   이름은 우연히 겹치지만, **날짜·분류·금액이 셋 다 같은 것**은 같은 것입니다.
+ *
+ * 열쇠 = 날짜 + 분류 + 금액
+ *
+ * ⚠️ 금액을 꼭 넣어야 합니다 (2026-08-31 첫 시도에서 실수함)
+ *
+ *   처음엔 매출만 「날짜 + 분류」로 했습니다. 하루에 카드매출은 하나일 거라 봤는데
+ *   마감정산서는 카드매출을 **두 줄** 만듭니다.
+ *       신용카드   → 카드매출
+ *       간편결제   → 카드매출   (카카오페이 · 네이버페이 · 페이코)
+ *   그래서 간편결제가 통째로 막혔습니다. 실제 로그에서 잡았습니다.
+ *       2026-07-19 카드매출 1,625,000원  들어감
+ *       2026-07-19 카드매출   117,000원  막힘  ← 간편결제였음
+ *
+ *   같은 날 미락 영수증이 두 장 오는 일도 있습니다. 금액이 다르면 둘 다 기록해야 합니다.
+ *
+ * ⚠️ 남는 약점 — 같은 날 · 같은 분류 · 같은 금액이 진짜로 두 건이면 하나만 들어갑니다.
+ *    드문 일이고, 「두 번 잡히는 것」보다는 나은 쪽을 골랐습니다.
+ */
+function 기존기록키_(sheet) {
+  var set = {};
+  var last = sheet.getLastRow();
+  if (last < 2) return set;
+
+  var v = sheet.getRange(2, 1, last - 1, 4).getValues();
+  v.forEach(function (r) {
+    var cat = String(r[1]).trim();
+    var d = toDate_(r[0]);
+    if (!d || !cat) return;
+    set[Utilities.formatDate(d, TIMEZONE, 'yyyy-MM-dd') + '|' + cat + '|' + (Number(r[3]) || 0)] = true;
+  });
+  return set;
+}
+
+/** 이 항목의 열쇠. 못 만들면 null (날짜를 못 읽은 것) */
+function 기록키_(item, amount) {
+  var d = toDate_(item.날짜);
+  if (!d) return null;
+  return Utilities.formatDate(d, TIMEZONE, 'yyyy-MM-dd') + '|' +
+         String(item.분류 || '기타').trim() + '|' + amount;
+}
+
 function recordDataSafely(sheet, items, branchName, fileName, fileId, docType) {
   var timestamp = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss");
   var rows = [], 거른것 = [];
+  var 이미있음 = 기존기록키_(sheet);   // 시트에 이미 있는 것
+  var 중복 = 0;
 
   items.forEach(function(item) {
     var amount = parseInt(String(item.금액 || "0").replace(/[^0-9]/g, "")) || 0;
@@ -1879,16 +1938,26 @@ function recordDataSafely(sheet, items, branchName, fileName, fileId, docType) {
       return;
     }
 
+    // ── 이미 들어간 것인가 ──────────────────────────────────
+    var key = 기록키_(item, amount);
+    if (key && 이미있음[key]) {
+      중복++;
+      거른것.push('   ♻️ ' + item.날짜 + ' ' + item.분류 + ' ' +
+                  amount.toLocaleString() + '원 — 이미 시트에 있음');
+      return;
+    }
+    if (key) 이미있음[key] = true;   // 같은 사진 안에서 두 번 나오는 것도 막는다
+
     rows.push([item.날짜||"", item.분류||"기타", item.항목명||"", amount, branchName, fileName, timestamp, fileId||""]);
     Logger.log("   " + item.날짜 + " | " + item.분류 + " | " + amount.toLocaleString() + "원");
   });
 
   거른것.forEach(function(l) { Logger.log(l); });
 
-  if (rows.length === 0) return { success: false, count: 0, 거름: 거른것.length };
+  if (rows.length === 0) return { success: false, count: 0, 거름: 거른것.length, 중복: 중복 };
   rows.forEach(function(r) { sheet.appendRow(r); });
   SpreadsheetApp.flush();
-  return { success: true, count: rows.length, 거름: 거른것.length };
+  return { success: true, count: rows.length, 거름: 거른것.length, 중복: 중복 };
 }
 
 function isAlreadyProcessedById(sheet, fileId) {
@@ -2074,10 +2143,16 @@ function processFiles(branchName) {
       continue;
     }
 
-    if (name.startsWith("[완료]") || name.startsWith("[확인요망]")) { skipped++; continue; }
+    if (name.startsWith("[완료]") || name.startsWith("[확인요망]") ||
+        name.startsWith("[중복확인]")) { skipped++; continue; }
     if (!file.getMimeType().startsWith("image/")) continue;
 
-    if (isAlreadyProcessedById(logSheet, file.getId()) || isAlreadyProcessed(logSheet, name)) {
+    // ⚠️ 2026-08-31 — 파일 이름 비교(isAlreadyProcessed)를 뺐습니다.
+    //    사진을 한꺼번에 올리면 이름이 초 단위라 겹칩니다.
+    //    그때 이 검사가 「이미 했다」며 시트엔 아무것도 안 쓰고 [완료] 만 붙였습니다.
+    //    원당 넉 달치 매출 1억 8천만원이 그렇게 사라졌습니다.
+    //    이제 중복은 recordDataSafely 가 **날짜·분류·금액**으로 판단합니다.
+    if (isAlreadyProcessedById(logSheet, file.getId())) {
       safeRename(file, "[완료] " + name);
       skipped++; continue;
     }
@@ -2093,6 +2168,13 @@ function processFiles(branchName) {
 
       var result = recordDataSafely(logSheet, res, branchName, name, file.getId(), docType);
       if (result.success) { safeRename(file, "[완료] " + name); processed++; }
+      else if (result.중복 > 0) {
+        // 읽기는 잘 됐는데 전부 이미 시트에 있는 것이었다.
+        // [완료] 를 붙이면 예전처럼 조용히 묻히므로 눈에 띄는 딱지를 붙인다.
+        safeRename(file, "[중복확인] " + name);
+        Logger.log("   ♻️ 이미 들어간 내용 — [중복확인] 으로 표시");
+        skipped++;
+      }
       else { safeRename(file, "[확인요망] 기록실패_" + name); errors++; }
     } catch (e) {
       safeRename(file, "[확인요망] 오류_" + name); errors++;
@@ -2144,6 +2226,48 @@ function retryFailedFiles() {
 // 📡 네이버 광고비 월말 자동 동기화 (매월 1일 오전 3시)
 // ============================================================
 
+/**
+ * 광고비 소급 동기화 — 1월부터 지난달까지 한꺼번에
+ *
+ *   2026-09-04 — 열 밀림 버그 때문에 네이버 광고비가 한 번도 안 들어갔습니다.
+ *   버그를 고쳤으니 밀린 달을 한 번에 채웁니다.
+ *
+ *   ⚠️ upsert 방식이라 여러 번 돌려도 두 번 잡히지 않습니다.
+ *      같은 표시([자동]네이버광고_지점_연월)를 찾아 갱신합니다.
+ */
+function 광고비_소급_미리보기() { 광고비소급_(true);  }
+function 광고비_소급_적용()   { 광고비소급_(false); }
+
+function 광고비소급_(dryRun) {
+  var now = new Date();
+  var 올해 = now.getFullYear();
+  var 끝달 = now.getMonth() + 1;   // 이번 달까지 (진행 중이어도 지금까지 쓴 것)
+
+  Logger.log(dryRun ? '=== 광고비 소급 (미리보기) ===' : '=== 광고비 소급 (적용) ===');
+
+  ['원당점', '백석점'].forEach(function (branch) {
+    Logger.log('\n──── [' + branch + '] ────');
+    var 합 = 0;
+    for (var m = 1; m <= 끝달; m++) {
+      var cost = 0;
+      try {
+        cost = getNaverAdCostForMonth(BRANCH_CONFIG[branch].naverSheetId, 올해, m);
+      } catch (e) { Logger.log('  ' + m + '월 오류: ' + e.message); continue; }
+      if (cost <= 0) continue;
+      Logger.log('  ' + olheMonth_(올해, m) + '  ' + cost.toLocaleString() + '원');
+      합 += cost;
+      if (!dryRun) writeNaverAdCostToSheet(branch, 올해, m, cost);
+    }
+    Logger.log('  합계 ' + 합.toLocaleString() + '원');
+  });
+
+  Logger.log(dryRun ? '\n※ 미리보기입니다. 아무것도 안 바꿨습니다.'
+                    : '\n✅ 완료. 손익계산서 「광고비」 줄에 반영됩니다.');
+  Logger.log('※ 당근 광고비는 영수증앱의 「금액만 넣기」로 따로 넣으셔야 합니다.');
+}
+
+function olheMonth_(y, m) { return y + '-' + ('0' + m).slice(-2); }
+
 function syncNaverAdCost() {
   Logger.log("=== 네이버 광고비용 동기화 시작 ===");
   var now        = new Date();
@@ -2164,20 +2288,48 @@ function syncNaverAdCost() {
   Logger.log("=== 완료 ===");
 }
 
+/**
+ * 트래커 「광고성과」 탭에서 그 달 네이버 광고비를 합산한다.
+ *
+ * ⚠️ 2026-09-04 — 열 번호가 한 칸씩 밀려 있던 것을 고쳤습니다.
+ *
+ *   광고성과 탭에 나중에 「id」 열이 앞에 붙으면서 전부 밀렸는데
+ *   코드는 옛 자리를 그대로 보고 있었습니다.
+ *
+ *       코드가 보던 것   row[0] = 날짜 · row[5] = 비용
+ *       실제            row[0] = id   · row[1] = 날짜 · row[6] = 비용
+ *
+ *   그래서 id 를 날짜로 읽어 전부 걸러졌고, 네이버 광고비가
+ *   **한 번도 손익계산서에 안 들어갔습니다.** 조용한 실패였습니다.
+ *
+ * ⚠️ 열 위치로 찾지 말고 **머리글 이름으로** 찾습니다.
+ *    열이 또 늘어나도 안 깨집니다.
+ */
 function getNaverAdCostForMonth(naverSheetId, year, month) {
   var ss    = SpreadsheetApp.openById(naverSheetId);
   var sheet = ss.getSheetByName("광고성과");
   if (!sheet) return 0;
   var lastRow = sheet.getLastRow();
   if (lastRow <= 1) return 0;
-  var data  = sheet.getRange(2, 1, lastRow - 1, 8).getValues();
+
+  var lastCol = sheet.getLastColumn();
+  var head    = sheet.getRange(1, 1, 1, lastCol).getValues()[0]
+                     .map(function (h) { return String(h).trim(); });
+  var iDate = head.indexOf('날짜');
+  var iCost = head.indexOf('비용');
+  if (iDate < 0 || iCost < 0) {
+    Logger.log('  ⚠️ 광고성과 탭에 「날짜」 또는 「비용」 머리글이 없습니다: ' + head.join(', '));
+    return 0;
+  }
+
+  var data  = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
   var total = 0;
   data.forEach(function(row) {
-    if (!row[0] || row[5] === "" || row[5] === null) return;
-    var d = (row[0] instanceof Date) ? row[0] : new Date(String(row[0]));
-    if (isNaN(d.getTime())) return;
+    if (!row[iDate] || row[iCost] === "" || row[iCost] === null) return;
+    var d = (row[iDate] instanceof Date) ? row[iDate] : toDate_(row[iDate]);
+    if (!d || isNaN(d.getTime())) return;
     if (d.getFullYear() === year && (d.getMonth() + 1) === month) {
-      total += parseInt(String(row[5]).replace(/[^0-9]/g, "")) || 0;
+      total += parseInt(String(row[iCost]).replace(/[^0-9]/g, "")) || 0;
     }
   });
   return total;
@@ -2205,8 +2357,338 @@ function writeNaverAdCostToSheet(branchName, year, month, cost) {
       }
     }
   }
-  logSheet.appendRow([dateStr, "네이버 광고비용", year+"년 "+month+"월 네이버 광고", cost, branchName, marker, nowStr, ""]);
+  logSheet.appendRow([dateStr, "광고비", year+"년 "+month+"월 네이버 광고", cost, branchName, marker, nowStr, ""]);
   SpreadsheetApp.flush();
+}
+
+
+// ════════════════════════════════════════════════════════════
+// 🧹 분류이름정리 — 괄호가 붙어 계상이 안 되던 것들
+//
+//   증상 (2026-09-02 발견)
+//     시트는 B열 라벨과 **글자 그대로 같은** 분류만 SUMIFS 로 잡습니다.
+//     괄호가 하나 붙으면 다른 계정으로 봅니다. 그래서 조용히 빠집니다.
+//
+//        가스사용료(매장)        8/21  248,530원   ← 8월 손익에 안 잡힘
+//        매장관리비(전기,수도)   7/01 1,177,780원  ← 7월 손익에 안 잡힘
+//
+//   ⚠️ 「중복제외」는 일부러 그대로 둡니다
+//     양깃머리 335,920원은 **가게카드에 이미 포함**된 건이라 뺀 것입니다.
+//     계정이 아니라 「빼놓은 표시」이므로 계상이 안 되는 게 맞습니다.
+//     괄호만 없애고 계정으로는 안 씁니다.
+//
+//   ⚠️ 「네이버 광고비용」 → 「광고비」
+//     퍼플 · 네이버 · 당근을 한 계정으로 모으기로 했습니다 (2026-09-02 결정).
+//     로그의 옛 이름도 같이 바꿉니다.
+// ════════════════════════════════════════════════════════════
+
+var 분류바꾸기_ = {
+  '가스사용료(매장)':      '가스사용료',
+  '매장관리비(전기,수도)': '매장관리비',
+  '중복제외(카드포함)':    '중복제외',
+  '네이버 광고비용':       '광고비',
+};
+
+function 분류이름정리_미리보기() { 분류이름정리_(true);  }
+function 분류이름정리_적용()   { 분류이름정리_(false); }
+
+function 분류이름정리_(dryRun) {
+  Logger.log(dryRun ? '=== 분류 이름 정리 (미리보기) ===' : '=== 분류 이름 정리 (적용) ===');
+
+  Object.keys(BRANCH_CONFIG).forEach(function (branch) {
+    var ss = SpreadsheetApp.openById(BRANCH_CONFIG[branch].ssId);
+    var sh = ss.getSheetByName('지출및매출로그');
+    if (!sh || sh.getLastRow() < 2) return;
+
+    Logger.log('\n──── [' + branch + '] ────');
+    var last = sh.getLastRow();
+    var 분류들 = sh.getRange(2, 2, last - 1, 1).getValues();
+    var 금액들 = sh.getRange(2, 4, last - 1, 1).getValues();
+    var 날짜들 = sh.getRange(2, 1, last - 1, 1).getValues();
+    var 바꾼수 = 0;
+
+    for (var i = 0; i < 분류들.length; i++) {
+      var 옛 = String(분류들[i][0]).trim();
+      var 새 = 분류바꾸기_[옛];
+      if (!새) continue;
+
+      var d = toDate_(날짜들[i][0]);
+      Logger.log('  ' + (d ? Utilities.formatDate(d, TIMEZONE, 'yyyy-MM-dd') : '?') +
+                 '  ' + Number(금액들[i][0]).toLocaleString() + '원   ' +
+                 옛 + '  →  ' + 새);
+      바꾼수++;
+      if (!dryRun) sh.getRange(i + 2, 2).setValue(새);   // 그 칸만 하나씩 쓴다
+    }
+
+    if (!바꾼수) Logger.log('  바꿀 것 없음 ✅');
+    else if (!dryRun) { SpreadsheetApp.flush(); Logger.log('  ✅ ' + 바꾼수 + '건 바꿈'); }
+  });
+
+  Logger.log(dryRun ? '\n※ 미리보기입니다. 아무것도 안 바꿨습니다.'
+                    : '\n✅ 완료. 손익계산서 숫자가 바로 바뀝니다.');
+  Logger.log('※ 「중복제외」는 계정이 아니라 표시용이라 계상되지 않는 것이 맞습니다.');
+}
+
+
+// ════════════════════════════════════════════════════════════
+// 🕐 시간대고치기 — 백석 시트가 하루 뒤처져 있던 문제
+//
+//   증거 (2026-09-04 확인)
+//     같은 시각에 두 시트에 TODAY() 를 물었더니 답이 달랐습니다.
+//        백석   TODAY = 2026-09-03      B7 = 2026-08-31
+//        원당   TODAY = 2026-09-04      B7 = 2026-09-01
+//     B7 에 든 값은 똑같은데 시트마다 다르게 읽었습니다.
+//     백석 시트의 시간대가 서울보다 뒤처져 있어 하루가 밀린 것입니다.
+//
+//   무엇이 망가지나
+//     A51 = EOMONTH(B7,0)      9월 말일이 아니라 8월 말일이 나옴
+//     A52 = MIN(A51, TODAY())  일할계산 기준일이 지난달에 머무름
+//     → 9월 시트가 8월 손익을 그대로 보여줍니다.
+//
+//   ⚠️ 파일 → 설정 → 시간대 에서 「서울」로 보였는데도 안 먹었습니다.
+//      그래서 코드로 직접 박습니다.
+//
+//   ⚠️ 시간대를 바꾸면 「처리시각」처럼 시각이 든 칸의 표시가 몇 시간 밀립니다.
+//      날짜만 든 칸은 그대로입니다. 지금이 틀린 상태이므로 바꾸는 게 맞습니다.
+// ════════════════════════════════════════════════════════════
+
+function 시간대_미리보기() { 시간대고치기_(true);  }
+function 시간대_적용()   { 시간대고치기_(false); }
+
+function 시간대고치기_(dryRun) {
+  var 목표 = 'Asia/Seoul';
+  Logger.log(dryRun ? '=== 시간대 확인 (미리보기) ===' : '=== 시간대 적용 ===');
+
+  Object.keys(BRANCH_CONFIG).forEach(function (branch) {
+    var ss = SpreadsheetApp.openById(BRANCH_CONFIG[branch].ssId);
+    var 현재 = null;
+    try { 현재 = ss.getSpreadsheetTimeZone(); } catch (e) {}
+    var 유효 = (typeof 현재 === 'string' && 현재.length > 0);
+
+    Logger.log('\n[' + branch + ']  지금: ' + (유효 ? 현재 : '(비어 있음)'));
+
+    if (유효 && 현재 === 목표) { Logger.log('  이미 서울입니다 ✅'); return; }
+    if (dryRun) { Logger.log('  → ' + 목표 + ' 로 바꿀 예정'); return; }
+
+    ss.setSpreadsheetTimeZone(목표);
+    SpreadsheetApp.flush();
+    var 확인 = null;
+    try { 확인 = ss.getSpreadsheetTimeZone(); } catch (e) {}
+    Logger.log('  → 바꿈. 다시 읽으니: ' + (확인 || '(비어 있음)'));
+
+    // 시트가 실제로 어떤 오늘을 보는지 확인
+    var sh = ss.getSheets()[0];
+    var 임시 = sh.getRange(1, 40);
+    try {
+      임시.setFormula('=TEXT(TODAY(),"yyyy-MM-dd")');
+      SpreadsheetApp.flush();
+      Logger.log('  시트가 보는 오늘: ' + 임시.getValue());
+    } catch (e) {
+    } finally { 임시.clearContent(); SpreadsheetApp.flush(); }
+  });
+
+  Logger.log(dryRun ? '\n※ 미리보기입니다. 아무것도 안 바꿨습니다.'
+                    : '\n✅ 완료. 이어서 fixBaseDatesForCurrentMonth() 를 실행하세요.');
+  Logger.log('※ B7 을 「값」이 아니라 =DATE() 「수식」으로 되돌려야 완전히 안전해집니다.');
+}
+
+
+// ════════════════════════════════════════════════════════════
+// 📣 광고비계정정리 — 시트 라벨과 수식의 「네이버 광고비용」을 「광고비」로
+//
+//   왜 (2026-09-02 결정)
+//     광고를 세 곳에서 돌렸습니다.
+//        퍼플    1~2월. 이미 「광고비」로 계상 완료. 지금은 안 씀
+//        네이버  트래커가 가져오는 중. 한 번도 계상 안 됨
+//        당근    한 번도 계상 안 됨. 충전식이라 영수증 없음
+//     나눠 볼 이유가 없어 **한 계정으로 모으기로** 했습니다.
+//
+//   ⚠️ 로그만 바꾸면 안 됩니다
+//     시트는 B열 라벨과 **수식 안의 분류 이름**으로 SUMIFS 를 겁니다.
+//     둘 다 바꿔야 잡힙니다. 이 함수는 두 곳을 같이 고칩니다.
+//
+//   ⚠️ 수식을 건드리는 함수입니다. 반드시 미리보기부터 보세요.
+//      2026-08-17 에 setFormulas 로 9개월치를 날린 사고가 있었습니다.
+//      그래서 여기서는 **바꿀 칸만 setFormula 로 하나씩** 씁니다.
+// ════════════════════════════════════════════════════════════
+
+function 광고비계정_미리보기() { 광고비계정정리_(true);  }
+function 광고비계정_적용()   { 광고비계정정리_(false); }
+
+function 광고비계정정리_(dryRun) {
+  var 옛이름 = '네이버 광고비용';
+  var 새이름 = '광고비';
+
+  Logger.log(dryRun ? '=== 광고비 계정 정리 (미리보기) ===' : '=== 광고비 계정 정리 (적용) ===');
+
+  var 바꾼수 = 0;
+
+  Object.keys(BRANCH_CONFIG).forEach(function (branch) {
+    var ss = SpreadsheetApp.openById(BRANCH_CONFIG[branch].ssId);
+    Logger.log('\n──── [' + branch + '] ────');
+
+    var targets = ['26년 x월 손익계산서'];
+    for (var m = 1; m <= 12; m++) targets.push('26년 ' + m + '월 손익계산서');
+
+    targets.forEach(function (tabName) {
+      var sh = ss.getSheetByName(tabName);
+      if (!sh) return;
+
+      var row = findLabelRow_(sh, 옛이름.replace(/\s+/g, ''));
+      if (row < 0) return;    // 이미 바꿨거나 그 지점엔 없는 행
+
+      // 그 행의 C열 ~ AK열에서 옛 이름이 든 수식을 찾는다
+      var 고칠칸 = [];
+      var lastCol = Math.min(sh.getLastColumn(), 37);
+      var fs = sh.getRange(row, 3, 1, lastCol - 2).getFormulas()[0];
+      for (var i = 0; i < fs.length; i++) {
+        if (fs[i] && fs[i].indexOf(옛이름) >= 0) 고칠칸.push({ col: i + 3, f: fs[i] });
+      }
+
+      Logger.log('  ' + tabName + '  ' + row + '행   라벨 + 수식 ' + 고칠칸.length + '칸');
+      바꾼수++;
+
+      if (dryRun) return;
+
+      sh.getRange(row, 2).setValue(새이름);                 // B열 라벨
+      고칠칸.forEach(function (c) {                          // 바꿀 칸만 하나씩
+        sh.getRange(row, c.col).setFormula(c.f.split(옛이름).join(새이름));
+      });
+      SpreadsheetApp.flush();
+    });
+  });
+
+  if (!바꾼수) {
+    Logger.log('\n바꿀 것이 없습니다. 이미 「광고비」로 되어 있거나 그 행이 없습니다.');
+    Logger.log('⚠️ 시트에서 B열 라벨을 직접 확인해 보세요.');
+    return;
+  }
+
+  Logger.log(dryRun ? '\n※ ' + 바꾼수 + '곳 변경 예정. 아무것도 안 바꿨습니다.'
+                    : '\n✅ ' + 바꾼수 + '곳 적용 완료. 퍼플 6건이 바로 잡힙니다.');
+}
+
+
+// ════════════════════════════════════════════════════════════
+// 🧾 관리비분리 — 7월 미납분이 8월과 한 줄로 들어간 건 정리
+//
+//   사정 (2026-09-02)
+//     7월 관리비를 미납해서 8월 고지서에 두 달치가 함께 나왔습니다.
+//     영수증 한 장에 두 달치가 적혀 있어 AI 가 한 줄로 넣었습니다.
+//
+//        7/01  매장관리비(전기,수도)  1,177,780원   ← 두 달치
+//
+//     발생한 달에 각각 잡혀야 손익이 맞습니다.
+//        7월  529,430원   (7월분 519,770 + 미납가산 9,660)
+//        8월  648,350원
+//
+//   ⚠️ 이번 한 번뿐인 일이라 이 함수도 일회용입니다. 두 번 돌리지 마세요.
+//      (안전장치가 있어 두 번 돌려도 아무 일 안 일어나게 해뒀습니다)
+// ════════════════════════════════════════════════════════════
+
+function 관리비분리_미리보기() { 관리비분리_(true);  }
+function 관리비분리_적용()   { 관리비분리_(false); }
+
+function 관리비분리_(dryRun) {
+  var 원본금액 = 1177780;
+  var 칠월     = 529430;   // 519,770 + 미납가산 9,660
+  var 팔월     = 648350;
+
+  Logger.log(dryRun ? '=== 7월 관리비 분리 (미리보기) ===' : '=== 7월 관리비 분리 (적용) ===');
+
+  var ss = SpreadsheetApp.openById(BRANCH_CONFIG['백석점'].ssId);
+  var sh = ss.getSheetByName('지출및매출로그');
+  var last = sh.getLastRow();
+  var v = sh.getRange(2, 1, last - 1, 4).getValues();
+
+  var 찾음 = -1;
+  for (var i = 0; i < v.length; i++) {
+    var cat = String(v[i][1]).trim();
+    if ((cat === '매장관리비(전기,수도)' || cat === '매장관리비') &&
+        Number(v[i][3]) === 원본금액) { 찾음 = i; break; }
+  }
+
+  if (찾음 < 0) {
+    Logger.log('  대상을 못 찾았습니다 (' + 원본금액.toLocaleString() + '원).');
+    Logger.log('  이미 나눈 뒤이거나 금액이 다릅니다. 그대로 두세요.');
+    return;
+  }
+
+  Logger.log('  찾음: ' + (찾음 + 2) + '행  ' + 원본금액.toLocaleString() + '원');
+  Logger.log('    → 7월  ' + 칠월.toLocaleString() + '원  (7월분 519,770 + 미납가산 9,660)');
+  Logger.log('    → 8월  ' + 팔월.toLocaleString() + '원  (당월분)');
+
+  if (dryRun) { Logger.log('\n※ 미리보기입니다. 아무것도 안 바꿨습니다.'); return; }
+
+  // 원래 줄을 7월분으로 고치고, 8월분은 한 줄 새로 넣는다
+  sh.getRange(찾음 + 2, 2).setValue('매장관리비');
+  sh.getRange(찾음 + 2, 3).setValue('관리비 (7월분 + 미납가산)');
+  sh.getRange(찾음 + 2, 4).setValue(칠월);
+
+  var nowStr = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd HH:mm:ss');
+  sh.appendRow(['2026-08-01', '매장관리비', '관리비 (8월 당월분)', 팔월, '백석점', '[분리]7월관리비', nowStr, '']);
+  SpreadsheetApp.flush();
+
+  Logger.log('\n✅ 나눴습니다. 7월·8월 손익이 각각 맞춰집니다.');
+}
+
+
+// ════════════════════════════════════════════════════════════
+// ✍️ 직접입력 — 영수증이 없는 지출을 금액만으로 기록
+//
+//   왜 필요한가 (2026-09-02)
+//     당근 광고비는 **충전식**입니다. 10만원 충전하면 그것으로 끝이고
+//     따로 받을 영수증이 없습니다. 네이버 광고비는 트래커가 자동으로 가져오지만
+//     당근은 연동할 방법이 없습니다.
+//
+//     수기로 시트에 적으면 결국 안 하게 됩니다.
+//     매장관리비가 여덟 달 내내 하드코딩이던 것도 같은 이유였습니다.
+//     **앱에서 두 번 눌러 끝나야** 계속 씁니다.
+//
+//   ⚠️ 중복은 막지 않고 알려만 줍니다
+//     사람이 직접 누르는 것이라, 같은 날 같은 금액을 두 번 충전할 수도 있습니다.
+//     막아버리면 진짜 두 건일 때 하나가 사라집니다.
+//     그래서 기록은 하되 「같은 것이 이미 있습니다」를 돌려줍니다.
+// ════════════════════════════════════════════════════════════
+
+function 직접입력_(data) {
+  var store  = data.store || '백석점';
+  var cat    = String(data.분류 || data.category || '').trim();
+  var amount = parseInt(String(data.금액 || data.amount || '0').replace(/[^0-9]/g, ''), 10) || 0;
+  var memo   = String(data.항목명 || data.memo || '').trim();
+  var ymd    = String(data.날짜 || data.date || '').trim();
+
+  if (!cat)      return jsonOut_({ success: false, error: '분류가 비었습니다' });
+  if (amount <= 0) return jsonOut_({ success: false, error: '금액이 0원입니다' });
+
+  var config = BRANCH_CONFIG[store];
+  if (!config) return jsonOut_({ success: false, error: '알 수 없는 지점: ' + store });
+
+  // 날짜를 안 주면 오늘
+  var d = ymd ? toDate_(ymd) : new Date();
+  if (!d) return jsonOut_({ success: false, error: '날짜를 못 읽었습니다: ' + ymd });
+  var 날짜문자 = Utilities.formatDate(d, TIMEZONE, 'yyyy-MM-dd');
+
+  var ss = SpreadsheetApp.openById(config.ssId);
+  var logSheet = ss.getSheetByName('지출및매출로그') || ss.insertSheet('지출및매출로그');
+  ensureHeaders(logSheet);
+
+  // 같은 것이 이미 있나 — 막지는 않고 알려만 준다
+  var 이미있음 = !!기존기록키_(logSheet)[날짜문자 + '|' + cat + '|' + amount];
+
+  var nowStr = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd HH:mm:ss');
+  logSheet.appendRow([날짜문자, cat, memo || cat, amount, store, '[직접입력]', nowStr, '']);
+  SpreadsheetApp.flush();
+
+  Logger.log('✍️ 직접입력 [' + store + '] ' + 날짜문자 + ' ' + cat + ' ' +
+             amount.toLocaleString() + '원' + (이미있음 ? '  ⚠️ 같은 것이 이미 있었음' : ''));
+
+  return jsonOut_({
+    success: true,
+    날짜: 날짜문자, 분류: cat, 금액: amount,
+    중복의심: 이미있음,
+    message: (이미있음 ? '⚠️ 같은 날 같은 금액이 이미 있습니다. 두 번 넣으신 게 맞나요?' : '기록했습니다')
+  });
 }
 
 
@@ -4082,4 +4564,454 @@ function 행정보_(sheet) {
 /** 수식 비교용 정리 — 공백·대소문자만 다른 것은 같은 것으로 본다 */
 function 정리_(f) {
   return String(f || '').replace(/\s+/g, '').toUpperCase();
+}
+
+
+// ════════════════════════════════════════════════════════════
+// 🔍 유실진단 — [완료]인데 시트에 안 들어간 사진 찾기
+//
+//   왜 이런 일이 생기나 (2026-08-26 원당에서 대규모로 발견)
+//
+//     파일 이름은 「올린 시각」으로 만들어집니다. 사진에 찍힌 날짜가 아닙니다.
+//         var timestamp = ... "yyyyMMdd_HHmmss"
+//         var fileName  = "[웹앱][" + docType + "] " + timestamp + ".jpg";
+//
+//     초 단위입니다. 사진 여러 장을 한 번에 선택해 올리면
+//     몇 초 안에 다 저장돼서 **이름이 똑같아집니다.**
+//
+//     그다음 processFiles 의 중복 판정이 이렇습니다.
+//         if (isAlreadyProcessedById(...) || isAlreadyProcessed(logSheet, name)) {
+//           safeRename(file, "[완료] " + name);   // ← 시트엔 한 줄도 안 쓰고 완료 표시
+//         }
+//
+//     isAlreadyProcessed 는 **파일 이름만** 비교합니다.
+//     첫 장만 들어가고 나머지는 전부 조용히 사라집니다. 드라이브만 보면 정상입니다.
+//
+//   ⚠️ 시간 초과와 헷갈리지 마세요
+//     시간 초과는 이름을 **안 바꿉니다.** 그대로 남겨두고 다음 날 이어서 합니다.
+//     「[완료]인데 데이터가 없다」면 그건 시간 초과가 아니라 이름 겹침입니다.
+//
+//   이 함수는 아무것도 바꾸지 않습니다. 세기만 합니다.
+// ════════════════════════════════════════════════════════════
+
+function 유실진단() {
+  Object.keys(BRANCH_CONFIG).forEach(function (branch) {
+    Logger.log('\n════════════ [' + branch + '] ════════════');
+
+    // ── ① 시트에 이미 들어간 것 모으기 ──────────────────────
+    var ss = SpreadsheetApp.openById(BRANCH_CONFIG[branch].ssId);
+    var sh = ss.getSheetByName('지출및매출로그');
+    var 있는ID = {}, 시트행 = 0, ID있는행 = 0;
+
+    if (sh && sh.getLastRow() > 1) {
+      var v = sh.getRange(2, 1, sh.getLastRow() - 1, COL_FILE_ID).getValues();
+      v.forEach(function (r) {
+        시트행++;
+        var id = String(r[COL_FILE_ID - 1] || '').trim();
+        if (id) { 있는ID[id] = true; ID있는행++; }
+      });
+    }
+
+    Logger.log('시트 기록 ' + 시트행 + '행 (그중 파일ID가 적힌 것 ' + ID있는행 + '행)');
+    if (시트행 > 0 && ID있는행 / 시트행 < 0.5) {
+      Logger.log('⚠️ 파일ID가 없는 옛날 기록이 많습니다. 아래 「유실」 숫자가 실제보다 커 보일 수 있습니다.');
+    }
+
+    // ── ② 드라이브 훑기 ────────────────────────────────────
+    var folder = DriveApp.getFolderById(BRANCH_CONFIG[branch].folderId);
+    var files  = folder.getFiles();
+    var 그룹 = {};                       // 원래이름 → 통계
+    var 총 = 0, 완료 = 0, 대기 = 0, 확인요망 = 0, 유실 = 0;
+    var 월별유실 = {};
+
+    while (files.hasNext()) {
+      var f    = files.next();
+      var name = f.getName().trim();
+      var 상태 = '대기', base = name;
+
+      if (name.indexOf('[완료]') === 0) {
+        상태 = '완료';
+        base = name.slice(4).trim();
+      } else if (name.indexOf('[확인요망]') === 0) {
+        상태 = '확인요망';
+        base = name.slice(6).trim().replace(/^(이미지준비실패|AI분석실패|기록실패|오류)_/, '');
+      }
+
+      총++;
+      if (상태 === '완료') 완료++; else if (상태 === '확인요망') 확인요망++; else 대기++;
+
+      if (!그룹[base]) 그룹[base] = { 총: 0, 들어감: 0, 유실: 0 };
+      그룹[base].총++;
+
+      if (있는ID[f.getId()]) {
+        그룹[base].들어감++;
+      } else if (상태 === '완료') {
+        // 완료 표시가 붙었는데 시트에 흔적이 없다 = 조용히 사라진 것
+        그룹[base].유실++;
+        유실++;
+        var ym = Utilities.formatDate(f.getDateCreated(), TIMEZONE, 'yyyy-MM');
+        월별유실[ym] = (월별유실[ym] || 0) + 1;
+      }
+    }
+
+    // ── ③ 요약 ─────────────────────────────────────────────
+    Logger.log('\n드라이브 ' + 총 + '장   완료 ' + 완료 + ' · 대기 ' + 대기 + ' · 확인요망 ' + 확인요망);
+    Logger.log('🔴 [완료]인데 시트에 없음 : ' + 유실 + '장');
+
+    if (유실 > 0) {
+      Logger.log('\n── 유실 사진을 올린 달 ──  (사진에 찍힌 날짜가 아니라 올린 날짜)');
+      Object.keys(월별유실).sort().forEach(function (ym) {
+        Logger.log('   ' + ym + '  ' + 월별유실[ym] + '장');
+      });
+    }
+
+    // ── ④ 이름이 겹친 그룹 ─────────────────────────────────
+    var 겹침 = Object.keys(그룹).filter(function (k) { return 그룹[k].총 > 1; })
+                    .sort(function (a, b) { return 그룹[b].총 - 그룹[a].총; });
+
+    Logger.log('\n── 이름이 겹친 그룹 ' + 겹침.length + '개 ──');
+    겹침.slice(0, 15).forEach(function (k) {
+      var g = 그룹[k];
+      Logger.log('   ' + g.총 + '장 중 ' + g.들어감 + '건만 들어감  |  ' + k);
+    });
+    if (겹침.length > 15) Logger.log('   … 그 외 ' + (겹침.length - 15) + '개');
+  });
+
+  Logger.log('\n※ 읽기만 했습니다. 아무것도 바꾸지 않았습니다.');
+  Logger.log('※ 사진은 드라이브에 그대로 있습니다. 이름표만 잘못 붙었을 뿐입니다.');
+}
+
+
+// ════════════════════════════════════════════════════════════
+// 📅 날짜진단 — 며칠치 매출이 비었나
+//
+//   왜 파일이 아니라 날짜를 세나 (2026-08-31)
+//
+//     유실진단() 은 「사진 몇 장이 시트에 없나」를 셌습니다.
+//     그런데 옛날 기록은 파일ID 칸이 없어서, 이미 들어간 것도
+//     「없음」으로 세어졌습니다. 원당 707장이 그래서 부풀려진 숫자였습니다.
+//
+//     손익계산서에 정말 필요한 건 「사진 몇 장」이 아니라
+//     **「그 달 며칠치 매출이 시트에 있나」** 입니다.
+//     5월 31일 중 3일치만 있으면 28일이 빈 것이고, 그게 곧 손익 오차입니다.
+//
+//   ⚠️ 이 숫자를 보고 재처리를 결정하세요
+//     빈 날이 없는데 사진만 남아 있다면 그건 이미 들어간 것입니다.
+//     그걸 다시 돌리면 매출이 두 번 잡힙니다. 빠진 것보다 나쁩니다.
+//
+//   이 함수는 아무것도 바꾸지 않습니다. 세기만 합니다.
+// ════════════════════════════════════════════════════════════
+
+// 매출로 치는 분류 (마감정산서에서 나옴)
+var 매출분류_ = ['현금매출', '카드매출', '배달매출'];
+
+// 지점별 정기 휴무 (0=일 … 6=토). 없으면 연중무휴
+var 휴무요일_ = { '백석점': 2, '원당점': null };
+
+function 날짜진단() {
+  var 오늘 = new Date();
+
+  Object.keys(BRANCH_CONFIG).forEach(function (branch) {
+    Logger.log('\n════════════ [' + branch + '] ════════════');
+
+    var ss = SpreadsheetApp.openById(BRANCH_CONFIG[branch].ssId);
+    var sh = ss.getSheetByName('지출및매출로그');
+    if (!sh || sh.getLastRow() < 2) { Logger.log('  기록 없음'); return; }
+
+    // ── 매출이 있는 날 모으기 ──────────────────────────────
+    var 있는날 = {};    // '2026-05-03' → 금액합
+    var v = sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues();
+    v.forEach(function (r) {
+      if (매출분류_.indexOf(String(r[1]).trim()) < 0) return;
+      var d = toDate_(r[0]);
+      if (!d) return;
+      var key = Utilities.formatDate(d, TIMEZONE, 'yyyy-MM-dd');
+      있는날[key] = (있는날[key] || 0) + (Number(r[3]) || 0);
+    });
+
+    var 휴무 = 휴무요일_[branch];
+    var 총영업일 = 0, 총있음 = 0;
+
+    Logger.log('월    있음/영업일   매출합계        빠진 날');
+    Logger.log('────────────────────────────────────────────────────────────');
+
+    for (var m = 1; m <= 12; m++) {
+      var 첫날 = new Date(2026, m - 1, 1);
+      if (첫날 > 오늘) break;
+
+      var 마지막 = new Date(2026, m, 0).getDate();
+      var 영업일 = 0, 있음 = 0, 합계 = 0, 빈날 = [];
+
+      for (var d = 1; d <= 마지막; d++) {
+        var day = new Date(2026, m - 1, d);
+        if (day > 오늘) break;                          // 아직 안 온 날
+        if (휴무 !== null && day.getDay() === 휴무) continue;   // 정기 휴무
+        영업일++;
+
+        var key = Utilities.formatDate(day, TIMEZONE, 'yyyy-MM-dd');
+        if (있는날[key]) { 있음++; 합계 += 있는날[key]; }
+        else 빈날.push(d);
+      }
+      if (!영업일) continue;
+
+      총영업일 += 영업일; 총있음 += 있음;
+
+      var 표시 = 빈날.length === 0 ? '없음 ✅'
+               : (빈날.length === 영업일 ? '⚠️ 통째로 빔'
+               : (빈날.length > 12 ? 빈날.slice(0, 12).join(',') + '… (' + 빈날.length + '일)'
+               : 빈날.join(',') + '일'));
+
+      Logger.log(
+        ('  ' + m + '월').slice(-4) + '  ' +
+        (있음 + '/' + 영업일 + '     ').slice(0, 8) +
+        (합계 ? 합계.toLocaleString() + '원' : '0원').padEnd(15, ' ') + ' ' + 표시
+      );
+    }
+
+    var 비율 = 총영업일 ? Math.round(총있음 / 총영업일 * 100) : 0;
+    Logger.log('────────────────────────────────────────────────────────────');
+    Logger.log('  합계  ' + 총있음 + '/' + 총영업일 + '일  (' + 비율 + '%)' +
+               (휴무 === null ? '  · 연중무휴로 계산' : '  · 화요일 휴무 제외'));
+  });
+
+  Logger.log('\n※ 읽기만 했습니다.');
+  Logger.log('※ 「빠진 날」이 진짜 구멍입니다. 그 날짜의 사진만 재처리하면 됩니다.');
+  Logger.log('※ 빠진 날이 없는데 드라이브에 사진이 남아 있다면 이미 들어간 것입니다. 다시 돌리지 마세요.');
+}
+
+
+// ════════════════════════════════════════════════════════════
+// ♻️ 복구준비 — 묻힌 사진에 다시 기회를 준다
+//
+//   무엇을 하나
+//     [완료] 딱지가 붙었는데 시트에 파일ID 흔적이 없는 사진을 골라
+//     딱지를 떼고 **겹치지 않는 이름**으로 바꿉니다.
+//     그러면 다음 처리 때 AI 가 다시 읽습니다.
+//
+//   ⚠️ 왜 이름을 바꾸나
+//     그냥 [완료] 만 떼면 이름이 여전히 다 같습니다.
+//     예전과 똑같이 첫 장만 들어가고 나머지는 또 묻힙니다.
+//     그래서 뒤에 실행시각+번호를 붙여 전부 다른 이름으로 만듭니다.
+//
+//   ⚠️ 두 번 들어갈 걱정은 안 하셔도 됩니다
+//     recordDataSafely 가 **날짜·분류·금액**으로 이미 있는 것을 걸러냅니다.
+//     이미 들어간 내용이면 [중복확인] 딱지만 붙고 시트는 안 건드립니다.
+//
+//   ⚠️ 한 번에 다 하지 마세요
+//     Apps Script 는 6분에서 끊깁니다. 한 장에 8초쯤 걸리니 40장이 한계입니다.
+//     조금씩 풀어서 매일 새벽 처리에 태우는 것이 안전합니다.
+// ════════════════════════════════════════════════════════════
+
+function 원당복구_미리보기() { 복구준비_('원당점', 40, true);  }
+function 원당복구_40장()    { 복구준비_('원당점', 40, false); }
+function 백석복구_미리보기() { 복구준비_('백석점', 40, true);  }
+function 백석복구_40장()    { 복구준비_('백석점', 40, false); }
+
+
+/**
+ * 복구 전용 자동 실행 — 임시 트리거를 걸어두는 용도
+ *
+ *   왜 dailyProcess 를 안 쓰나
+ *     dailyProcess 는 고기값 동기화 · 알바 백업 · 건강검진까지 같이 합니다.
+ *     그걸 매시간 돌리면 쓸데없는 일을 스물네 번 하게 됩니다.
+ *     이 함수는 **묻힌 사진 풀기 + 처리** 딱 두 가지만 합니다.
+ *
+ *   쓰는 법
+ *     ① Apps Script 왼쪽 「트리거(시계 아이콘)」 → 트리거 추가
+ *          함수      복구자동
+ *          이벤트     시간 기반 → 시간 타이머 → 1시간마다
+ *     ② 며칠 두고 날짜진단() 으로 확인
+ *     ③ 「더 풀 것이 없습니다」가 나오면 **트리거를 지우세요**
+ *
+ *   ⚠️ 트리거를 안 지우면 매시간 헛돕니다. 다 끝나면 꼭 지우세요.
+ *   ⚠️ 구글 계정은 하루 실행시간이 90분으로 묶여 있습니다.
+ *      627장이면 84분쯤 걸리니 이틀은 잡으셔야 합니다.
+ */
+function 복구자동() {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) { Logger.log('다른 처리가 도는 중 — 건너뜁니다'); return; }
+  try {
+    복구준비_('원당점', 40, false);   // 묻힌 것 40장 풀기
+    processFiles('원당점');           // 시간 되는 데까지 처리
+  } catch (e) {
+    Logger.log('FATAL: ' + e.message);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * 기준일비교 — 왜 원당은 되고 백석은 안 되나
+ *
+ *   증상 (2026-09-02)
+ *     백석 9월 시트에서 A51 = EOMONTH(B7, 0) 이 **8월 31일**을 돌려줬습니다.
+ *     B7 은 분명 9월 1일인데도 그렇습니다. 9월 30일이 나와야 정상입니다.
+ *     원당은 같은 수식인데 멀쩡합니다.
+ *
+ *   짚이는 것
+ *     ① 두 스프레드시트의 **시간대 설정이 다르다**
+ *        파일마다 따로 설정됩니다. 백석만 한국이 아닐 수 있습니다.
+ *        시간대가 밀리면 9/1 00:00 이 그 시트에서는 8/31 저녁이 됩니다.
+ *     ② B7 이 수식이 아니라 **값**으로 들어가 있다
+ *        값으로 넣으면 시간대 차이를 그대로 맞습니다.
+ *        그래서 setupBaseDate_ 는 =DATE() 수식으로 넣게 돼 있는데,
+ *        나중에 누가 값으로 덮었을 수 있습니다.
+ *     ③ 두 지점 양식이 다르다
+ *        백석은 A50~A52, 원당은 A56~A58 을 씁니다.
+ *
+ *   이 함수는 아무것도 바꾸지 않습니다.
+ */
+function 기준일비교() {
+  var now = new Date();
+  var 시트명 = String(now.getFullYear()).slice(2) + '년 ' + (now.getMonth() + 1) + '월 손익계산서';
+
+  ['백석점', '원당점'].forEach(function (branch) {
+    var config = BRANCH_CONFIG[branch];
+    if (!config) return;
+    var ss = SpreadsheetApp.openById(config.ssId);
+
+    Logger.log('\n════════════ [' + branch + '] ' + 시트명 + ' ════════════');
+
+    // ① 스프레드시트 시간대 — 파일마다 따로 설정된다
+    //    ⚠️ 값이 비어 있는(빈 문자열) 스프레드시트가 실제로 있습니다.
+    //       그대로 Utilities.formatDate 에 넘기면 죽습니다. 2026-09-02 겪음.
+    var tz생값 = null;
+    try { tz생값 = ss.getSpreadsheetTimeZone(); } catch (e) {}
+    var tz유효 = (typeof tz생값 === 'string' && tz생값.length > 0);
+    var tz = tz유효 ? tz생값 : TIMEZONE;   // 표시용으로만 대체값을 쓴다
+
+    Logger.log('  시트 시간대   ' +
+      (!tz유효 ? '⚠️ 비어 있음 — 이것이 원인입니다'
+               : tz생값 + (tz생값 === 'Asia/Seoul' ? '  ✅' : '  ⚠️ 서울이 아닙니다')));
+    Logger.log('  스크립트 시간대 ' + TIMEZONE);
+
+    var sh = ss.getSheetByName(시트명);
+    if (!sh) { Logger.log('  ⚠️ 시트 없음'); return; }
+
+    // ② B7 이 수식인가 값인가
+    var b7 = sh.getRange('B7');
+    var m = b7.getMergedRanges();
+    if (m.length) b7 = m[0].getCell(1, 1);
+    var f7 = b7.getFormula();
+    var v7 = b7.getValue();
+    Logger.log('  B7  ' + (f7 ? '수식 ' + f7 : '⚠️ 수식 없음 — 값으로 들어가 있음') +
+               '   →  ' + (v7 instanceof Date ? Utilities.formatDate(v7, tz, 'yyyy-MM-dd HH:mm') : JSON.stringify(v7)));
+
+    // ③ A45~A60 중 뭔가 든 칸 전부 (지점마다 쓰는 칸이 다르다)
+    Logger.log('  ── A45~A60 중 내용이 있는 칸 ──');
+    var vals = sh.getRange(45, 1, 16, 1).getValues();
+    var fs   = sh.getRange(45, 1, 16, 1).getFormulas();
+    for (var i = 0; i < 16; i++) {
+      var v = vals[i][0], f = fs[i][0];
+      if (v === '' && !f) continue;
+      var 보임 = (v instanceof Date) ? Utilities.formatDate(v, tz, 'yyyy-MM-dd') : JSON.stringify(v);
+      Logger.log('    A' + (45 + i) + '  ' + 보임 + (f ? '   ← ' + f : ''));
+    }
+
+    // ④ 시트가 직접 계산하게 해서 진짜 답을 본다
+    var 임시 = sh.getRange(1, 40);   // AN1 — 비어 있는 칸
+    try {
+      임시.setFormula('=TEXT(EOMONTH(B7,0),"yyyy-MM-dd")&" / "&TEXT(B7,"yyyy-MM-dd")&" / "&TEXT(TODAY(),"yyyy-MM-dd")');
+      SpreadsheetApp.flush();
+      Logger.log('  ── 시트가 직접 계산한 값 ──');
+      Logger.log('    EOMONTH(B7,0) / B7 / TODAY  =  ' + 임시.getValue());
+    } catch (e) {
+      Logger.log('    계산 실패: ' + e.message);
+    } finally {
+      임시.clearContent();
+      SpreadsheetApp.flush();
+    }
+  });
+
+  Logger.log('\n※ 읽기만 했습니다 (임시 계산 칸은 지웠습니다).');
+  Logger.log('※ 시간대가 두 시트에서 다르면 그것이 원인입니다.');
+  Logger.log('※ B7 에 「수식 없음」이 뜨면 값으로 덮인 것이라 그것도 원인이 됩니다.');
+}
+
+/** 복구가 끝났는지 한눈에 — 트리거를 언제 지울지 판단용 */
+function 복구남은것() {
+  ['원당점', '백석점'].forEach(function (branch) {
+    var config = BRANCH_CONFIG[branch];
+    var sh = SpreadsheetApp.openById(config.ssId).getSheetByName('지출및매출로그');
+    var 있는ID = {};
+    if (sh && sh.getLastRow() > 1) {
+      sh.getRange(2, COL_FILE_ID, sh.getLastRow() - 1, 1).getValues().forEach(function (r) {
+        var id = String(r[0] || '').trim(); if (id) 있는ID[id] = true;
+      });
+    }
+    var files = DriveApp.getFolderById(config.folderId).getFiles();
+    var 풀것 = 0, 대기 = 0, 중복확인 = 0, 확인요망 = 0;
+    while (files.hasNext()) {
+      var f = files.next(), n = f.getName().trim();
+      if (n.indexOf('[완료]') === 0) { if (!있는ID[f.getId()]) 풀것++; }
+      else if (n.indexOf('[중복확인]') === 0) 중복확인++;
+      else if (n.indexOf('[확인요망]') === 0) 확인요망++;
+      else 대기++;
+    }
+    Logger.log('[' + branch + ']  더 풀 것 ' + 풀것 + '장 · 처리 대기 ' + 대기 +
+               '장 · 중복확인 ' + 중복확인 + '장 · 확인요망 ' + 확인요망 + '장');
+    if (풀것 === 0 && 대기 === 0) Logger.log('   ✅ 끝났습니다. 트리거를 지우셔도 됩니다.');
+  });
+  Logger.log('\n※ 「중복확인」은 이미 시트에 있던 내용입니다. 정상입니다.');
+  Logger.log('※ 「확인요망」은 AI 가 날짜·금액을 못 읽은 것입니다. 손으로 보셔야 합니다.');
+}
+
+function 복구준비_(branchName, 개수, dryRun) {
+  var config = BRANCH_CONFIG[branchName];
+  if (!config) { Logger.log('알 수 없는 지점: ' + branchName); return; }
+
+  Logger.log(dryRun ? '=== 복구 준비 (미리보기 · 이름 안 바꿈) ===' : '=== 복구 준비 (실제 적용) ===');
+  Logger.log('[' + branchName + '] 최대 ' + 개수 + '장\n');
+
+  // 시트에 이미 파일ID 가 박힌 것 모으기
+  var ss = SpreadsheetApp.openById(config.ssId);
+  var sh = ss.getSheetByName('지출및매출로그');
+  var 있는ID = {};
+  if (sh && sh.getLastRow() > 1) {
+    sh.getRange(2, COL_FILE_ID, sh.getLastRow() - 1, 1).getValues().forEach(function (r) {
+      var id = String(r[0] || '').trim();
+      if (id) 있는ID[id] = true;
+    });
+  }
+
+  var 도장 = Utilities.formatDate(new Date(), TIMEZONE, 'MMddHHmm');
+  var files = DriveApp.getFolderById(config.folderId).getFiles();
+  var 대상 = 0, 이미확인 = 0, 남은것 = 0;
+
+  while (files.hasNext()) {
+    var f = files.next();
+    var name = f.getName().trim();
+
+    if (name.indexOf('[완료]') !== 0) continue;          // [완료] 인 것만
+    if (있는ID[f.getId()]) { 이미확인++; continue; }      // 시트에 흔적이 있다 → 그대로 둔다
+
+    if (대상 >= 개수) { 남은것++; continue; }
+    대상++;
+
+    var base = name.slice(4).trim();
+    var 새이름 = base.replace(/\.(jpg|jpeg|png|heic)$/i, '') +
+                 '_재' + 도장 + '_' + ('00' + 대상).slice(-3) +
+                 (base.match(/\.(jpg|jpeg|png|heic)$/i) || ['.jpg'])[0];
+
+    if (대상 <= 5) Logger.log('  ' + name + '\n    → ' + 새이름);
+    if (!dryRun) safeRename(f, 새이름);
+  }
+
+  if (대상 > 5) Logger.log('  … 그 외 ' + (대상 - 5) + '장');
+
+  Logger.log('\n──────────────────────────────────────────');
+  Logger.log('  이번에 푼 것        ' + 대상 + '장');
+  Logger.log('  시트에 흔적 있어 그대로 둔 것  ' + 이미확인 + '장');
+  Logger.log('  아직 안 푼 것       ' + 남은것 + '장');
+
+  if (dryRun) {
+    Logger.log('\n※ 미리보기입니다. 아무것도 안 바꿨습니다.');
+    Logger.log('※ 실제로 하려면 ' + branchName.replace('점', '') + '복구_40장() 을 실행하세요.');
+  } else {
+    Logger.log('\n✅ ' + 대상 + '장을 풀었습니다.');
+    Logger.log('   이제 dailyProcess 가 돌 때 다시 읽습니다 (매일 새벽 자동).');
+    Logger.log('   지금 바로 하려면 test원당점() · test백석점() 을 실행하세요.');
+    if (남은것 > 0) Logger.log('   ' + 남은것 + '장이 남았습니다. 내일 또 이 함수를 돌리세요.');
+  }
+  Logger.log('\n⚠️ 재처리해도 이미 시트에 있는 내용은 [중복확인] 딱지만 붙고 안 들어갑니다.');
 }
