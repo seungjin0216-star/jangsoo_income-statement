@@ -2027,7 +2027,15 @@ function dailyProcess() {
     //   있었는데, 로그를 열어보기 전까지 아무도 몰랐다.
     //   영수증이 안 들어가면 손익 숫자가 조용히 비어간다.
     checkRunHealth_();
-    // syncMeatCosts("원당점");   // 원당점 입고기록도 있으면 주석 해제
+
+    // ⚠️ 2026-09-05 — 원당 고기값 자동계상을 켰습니다.
+    //    원당 입고앱(index.html)이 새 원당 GAS 로 옮겨지면서
+    //    「입고기록」 시트에 '원당점' 으로 쌓이기 시작합니다.
+    //    고기 단가는 백석과 같습니다 (사장님 확인).
+    //
+    //    ⚠️ 원당 입고가 아직 하나도 없으면 그냥 0건으로 지나갑니다. 무해합니다.
+    syncMeatCosts("원당점", SYNC_RECENT_MONTHS);
+    syncLiquorCosts("원당점", SYNC_RECENT_MONTHS);
 
     Logger.log("=== 자동 처리 완료 ===");
   } catch (e) {
@@ -3061,7 +3069,34 @@ var MEAT_PRICES = {
   '간':      20000
 };
 
+/**
+ * 식자재 원가 소급 — 발주 기록 전체를 다시 훑어 계상
+ *
+ *   2026-09-04 — 콩나물 단가가 없어 계상이 통째로 빠져 있었습니다.
+ *   단가를 넣었으니 그동안의 발주를 한 번에 채웁니다.
+ *
+ *   ⚠️ upsert 방식이라 여러 번 돌려도 두 번 잡히지 않습니다.
+ *      같은 표시([자동]분류_지점_날짜_row번호)를 찾아 갱신합니다.
+ *   ⚠️ 6분 제한이 있습니다. 끊기면 한 번 더 돌리세요.
+ */
+function 식자재원가_전체동기화() {
+  ['백석점', '원당점'].forEach(function (b) {
+    try { syncLiquorCosts(b, null); }        // null = 기간 제한 없음
+    catch (e) { Logger.log('[' + b + '] 오류: ' + e.message); }
+  });
+  Logger.log('\n✅ 완료. 주류원가 · 음료원가 · 콩나물이 채워집니다.');
+  Logger.log('※ 「단가 없음」이 찍힌 품목이 있으면 단가표를 채워야 합니다 (지금은 복분자).');
+}
+
+// ── 콩나물 단가 (1개) — 2026-09-04 추가
+//    발주 앱에 기록은 남는데 금액 계산을 안 해서 계상이 빠져 있었습니다.
+//    주류·음료와 같은 방식으로 붙였습니다.
+var BEANSPROUT_PRICES = {
+  '콩나물': 9000
+};
+
 // ── 음료수 단가 (1케이스)
+//    ⚠️ 원당은 「웰치스포도」를 안 씁니다. 단가는 백석과 같습니다.
 var DRINK_PRICES = {
   '콜라':       23000,
   '사이다':     22000,
@@ -3257,9 +3292,23 @@ function syncMeatCosts(branchName, months) {
  *    수량이 없으면 0원 → 로그 기록 건너뜀.
  */
 /** @param {number} [months] 최근 몇 개월만. 생략하면 전체. (syncMeatCosts 와 동일) */
+/**
+ * 식자재 발주 → 손익계산서 원가 계상
+ *
+ * ⚠️ 이름은 「주류」로 시작하지만 실제로는 **주류 · 음료 · 콩나물** 셋을 다 봅니다.
+ *    2026-09-04 에 콩나물이 추가됐습니다. 이름은 옛것을 그대로 뒀습니다
+ *    (트리거·다른 코드에서 부르고 있어서 바꾸면 끊깁니다).
+ *
+ * 「식자재발주」 시트 한 줄이 이렇게 생겼습니다
+ *      날짜 | 지점 | 업체 | "콩나물 3, ..."
+ * 업체별 단가표에서 단가를 찾아 수량을 곱해 로그에 씁니다.
+ *
+ * ⚠️ 단가가 없는 품목은 조용히 0원이 됩니다. 로그에 「단가 없음」이 찍히니 확인하세요.
+ *    지금은 복분자가 0원입니다 (단가 미확인).
+ */
 function syncLiquorCosts(branchName, months) {
   var 기준 = monthsAgoYmd_(months);
-  Logger.log('\n--- [' + branchName + '] 주류·음료 동기화 시작' +
+  Logger.log('\n--- [' + branchName + '] 주류·음료·콩나물 동기화 시작' +
              (기준 ? ' (' + 기준 + ' 이후)' : ' (전체)') + ' ---');
 
   var stockSS = SpreadsheetApp.openById(STOCK_SS_ID);
@@ -3282,7 +3331,9 @@ function syncLiquorCosts(branchName, months) {
     var bodyText = String(row[3] || '').trim();
 
     if (branch !== branchName) continue;
-    if (supplier !== '주류' && supplier !== '음료수') continue;
+    // ⚠️ 2026-09-04 — 콩나물을 여기 넣었습니다.
+    //    발주 기록은 남는데 금액 계산이 없어 계상이 통째로 빠져 있었습니다.
+    if (supplier !== '주류' && supplier !== '음료수' && supplier !== '콩나물') continue;
 
     // 날짜 파싱 (Date 객체 / YYYY-MM-DD / YY.MM.DD(요일) 세 형식 모두 처리)
     var ymd;
@@ -3313,8 +3364,12 @@ function syncLiquorCosts(branchName, months) {
     }
     if (!itemLine) { Logger.log('품목 정보 없음 (row ' + (i+1) + ')'); continue; }
 
-    var prices      = (supplier === '주류') ? LIQUOR_PRICES : DRINK_PRICES;
-    var category    = (supplier === '주류') ? '주류원가' : '음료원가';
+    var prices   = (supplier === '주류')   ? LIQUOR_PRICES
+                 : (supplier === '콩나물') ? BEANSPROUT_PRICES
+                 : DRINK_PRICES;
+    var category = (supplier === '주류')   ? '주류원가'
+                 : (supplier === '콩나물') ? '콩나물'
+                 : '음료원가';
     var totalCost   = 0;
     var itemDetails = [];
 
