@@ -66,20 +66,28 @@ body{font-family:-apple-system,"Helvetica Neue",sans-serif;background:var(--bg);
   </div>
 </div>
 <div class="wrap">
-<div class="sec-lbl">① 문서 유형 선택</div>
+<!-- ⚠️ 2026-09-04 원당 계정 정리 (사장님 지정)
+     사진 셋 · 금액 여섯. 백석과 목록이 다릅니다.
+       사진   매출(마감정산서) · 미락 · 매장관리비(전기 명세서)
+       금액   배달매출 · 키위 · 콩나물 · 가게내부카드 · 가게외부카드 · 매장관리비(수도)
+
+     ⚠️ 가게내부카드를 「월 1회 금액」으로 바꾼 이유
+        건별로 넣으면 오류가 났을 때 어디서 틀렸는지 추적이 안 됩니다.
+        하루 3~5건씩 쌓이는데 금액도 1,000원·3,300원처럼 잘아서
+        한 건이 빠져도 눈에 안 띕니다. 월 합계 한 줄이 오히려 정확합니다.
+
+     ⚠️ 매장관리비는 버튼만 둘, 계정은 하나입니다.
+        계정을 나누면 시트 라벨도 나눠야 하고,
+        「매장관리비(전기,수도)」처럼 괄호가 붙어 계상이 안 되는 사고가 또 납니다.
+        (2026-09-02 백석에서 실제로 겪음) -->
+<div class="sec-lbl">① 사진으로 올릴 것 — 유형 선택</div>
 <div class="doc-grid">
-  <button class="doc-btn" onclick="sel(this,'마감정산서')"><span class="btn-emoji">📊</span><span class="btn-lbl">마감정산서</span></button>
-  <button class="doc-btn" onclick="sel(this,'고기값')"><span class="btn-emoji">🥩</span><span class="btn-lbl">고기값</span></button>
-  <button class="doc-btn" onclick="sel(this,'음료수')"><span class="btn-emoji">🥤</span><span class="btn-lbl">음료수</span></button>
-  <button class="doc-btn" onclick="sel(this,'가게내부카드')"><span class="btn-emoji">💳</span><span class="btn-lbl">가게내부카드</span></button>
-  <button class="doc-btn" onclick="sel(this,'가게외부카드')"><span class="btn-emoji">🛒</span><span class="btn-lbl">가게외부카드<br>(인터넷주문)</span></button>
+  <button class="doc-btn" onclick="sel(this,'마감정산서')"><span class="btn-emoji">📊</span><span class="btn-lbl">매출<br><small style="font-weight:400;opacity:.6">마감정산서</small></span></button>
   <button class="doc-btn" onclick="sel(this,'미락')"><span class="btn-emoji">🧾</span><span class="btn-lbl">미락</span></button>
-  <button class="doc-btn" onclick="sel(this,'콩나물')"><span class="btn-emoji">🌾</span><span class="btn-lbl">콩나물</span></button>
-  <button class="doc-btn" onclick="sel(this,'주류')"><span class="btn-emoji">🍶</span><span class="btn-lbl">주류</span></button>
-  <button class="doc-btn" onclick="sel(this,'기타')" style="grid-column:1/-1"><span class="btn-emoji">📄</span><span class="btn-lbl">기타</span></button>
+  <button class="doc-btn" onclick="sel(this,'관리비')" style="grid-column:1/-1"><span class="btn-emoji">⚡</span><span class="btn-lbl">매장관리비 — 전기<br><small style="font-weight:400;opacity:.6">명세서 사진</small></span></button>
 </div>
 
-<div class="sec-lbl">② 사진 촬영 / 선택</div>
+<div class="sec-lbl">사진 촬영 / 선택</div>
 <div class="photo-box" id="photoBox" onclick="document.getElementById('fileInput').click()">
   <div class="ph-icon">📷</div>
   <div class="ph-txt" id="phTxt">여기를 눌러 사진 선택</div>
@@ -90,21 +98,22 @@ body{font-family:-apple-system,"Helvetica Neue",sans-serif;background:var(--bg);
 <button id="addBtn" class="add-btn" onclick="addToQueue()" disabled>+ 목록에 추가</button>
 
 <div class="queue-wrap" id="queueWrap" style="display:none">
-  <div class="sec-lbl" style="margin-top:20px">③ 업로드 목록</div>
+  <div class="sec-lbl" style="margin-top:20px">업로드 목록</div>
   <div id="queueList"></div>
 </div>
 <button id="submitBtn" class="submit-btn" onclick="submitAll()" disabled>모두 제출하기</button>
 <!-- ── 영수증이 없는 지출 (2026-09-02 추가) ──────────────────────
      당근 광고비처럼 충전식이라 받을 영수증이 없는 것들을 위한 칸입니다.
      사진 없이 계정 고르고 금액만 적어 보냅니다. -->
-<div class="sec-lbl" style="margin-top:28px">✍️ 영수증 없이 금액만 넣기</div>
-<div style="font-size:13px;color:#8b94a7;margin:-6px 0 12px">당근 광고비처럼 영수증이 안 나오는 지출</div>
+<div class="sec-lbl" style="margin-top:28px">② 금액만 적을 것</div>
+<div style="font-size:13px;color:#8b94a7;margin:-6px 0 12px">영수증 없이 금액만 · 대부분 월 1회</div>
 <div class="doc-grid" id="dirGrid">
-  <button class="doc-btn" onclick="dirSel(this,'광고비')"><span class="btn-emoji">📣</span><span class="btn-lbl">광고비</span></button>
-  <button class="doc-btn" onclick="dirSel(this,'매장관리비')"><span class="btn-emoji">🏢</span><span class="btn-lbl">매장관리비</span></button>
-  <button class="doc-btn" onclick="dirSel(this,'가스사용료')"><span class="btn-emoji">🔥</span><span class="btn-lbl">가스사용료</span></button>
-  <button class="doc-btn" onclick="dirSel(this,'기타잡비용')"><span class="btn-emoji">📦</span><span class="btn-lbl">기타잡비용</span></button>
-  <button class="doc-btn" onclick="dirSel(this,'키위')"><span class="btn-emoji">🥝</span><span class="btn-lbl">키위(보성)</span></button>
+  <button class="doc-btn" onclick="dirSel(this,'배달매출','배달앱 정산')"><span class="btn-emoji">🛵</span><span class="btn-lbl">배달매출<br><small style="font-weight:400;opacity:.6">월 1회</small></span></button>
+  <button class="doc-btn" onclick="dirSel(this,'가게내부카드','월 합계')"><span class="btn-emoji">💳</span><span class="btn-lbl">가게내부카드<br><small style="font-weight:400;opacity:.6">월 1회</small></span></button>
+  <button class="doc-btn" onclick="dirSel(this,'가게외부카드','월 합계')"><span class="btn-emoji">🛒</span><span class="btn-lbl">가게외부카드<br><small style="font-weight:400;opacity:.6">인터넷주문</small></span></button>
+  <button class="doc-btn" onclick="dirSel(this,'콩나물','')"><span class="btn-emoji">🌾</span><span class="btn-lbl">콩나물</span></button>
+  <button class="doc-btn" onclick="dirSel(this,'키위','보성')"><span class="btn-emoji">🥝</span><span class="btn-lbl">키위<br><small style="font-weight:400;opacity:.6">보성</small></span></button>
+  <button class="doc-btn" onclick="dirSel(this,'매장관리비','수도요금')"><span class="btn-emoji">💧</span><span class="btn-lbl">매장관리비 — 수도<br><small style="font-weight:400;opacity:.6">숫자 입력</small></span></button>
 </div>
 <div style="display:flex;gap:8px;margin-top:12px">
   <input id="dirAmt" type="number" inputmode="numeric" placeholder="금액 (원)"
@@ -138,9 +147,15 @@ document.addEventListener("DOMContentLoaded",function(){
   var d=document.getElementById("dirDate");
   if(d) d.value=new Date().toLocaleDateString("sv-SE");   // sv-SE = YYYY-MM-DD
 });
-function dirSel(btn,cat){
+function dirSel(btn,cat,memo){
   document.querySelectorAll("#dirGrid .doc-btn").forEach(function(b){b.classList.remove("sel")});
-  btn.classList.add("sel"); _dirCat=cat; dirChk();
+  btn.classList.add("sel"); _dirCat=cat;
+  /* 버튼 이름과 계정이 다를 때를 위한 기본 메모.
+     예) 「매장관리비 — 수도」 버튼 → 계정은 매장관리비, 메모는 "수도요금"
+     계정을 나누면 시트 라벨도 나눠야 하고 괄호 붙어 계상이 안 되는 사고가 납니다. */
+  var m=document.getElementById("dirMemo");
+  if(m && typeof memo==="string") m.value=memo;
+  dirChk();
 }
 function dirChk(){
   var amt=parseInt(document.getElementById("dirAmt").value||"0",10);

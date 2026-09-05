@@ -139,9 +139,15 @@ document.addEventListener("DOMContentLoaded",function(){
   var d=document.getElementById("dirDate");
   if(d) d.value=new Date().toLocaleDateString("sv-SE");   // sv-SE = YYYY-MM-DD
 });
-function dirSel(btn,cat){
+function dirSel(btn,cat,memo){
   document.querySelectorAll("#dirGrid .doc-btn").forEach(function(b){b.classList.remove("sel")});
-  btn.classList.add("sel"); _dirCat=cat; dirChk();
+  btn.classList.add("sel"); _dirCat=cat;
+  /* 버튼 이름과 계정이 다를 때를 위한 기본 메모.
+     예) 「매장관리비 — 수도」 버튼 → 계정은 매장관리비, 메모는 "수도요금"
+     계정을 나누면 시트 라벨도 나눠야 하고 괄호 붙어 계상이 안 되는 사고가 납니다. */
+  var m=document.getElementById("dirMemo");
+  if(m && typeof memo==="string") m.value=memo;
+  dirChk();
 }
 function dirChk(){
   var amt=parseInt(document.getElementById("dirAmt").value||"0",10);
