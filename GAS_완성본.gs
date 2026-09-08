@@ -5904,3 +5904,121 @@ function 인건비시트진단() {
   Logger.log('   ⚠️ 0원    진짜 구멍입니다');
   Logger.log('\n ※ 읽기만 했습니다.');
 }
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  💸 지출진단() — 지출 계정이 달마다 빠짐없이 들어갔나
+//
+//  2026-09-07 추가. 매출을 100% 채우고 나서 만든 것입니다.
+//
+//  왜 필요한가
+//    매출은 「그날 기록이 있나」로 구멍을 셀 수 있었다.
+//    지출은 그게 안 된다. 매일 사는 게 아니기 때문이다.
+//    대신 「지난달엔 있었는데 이번 달엔 없다」로 찾는다.
+//    전기요금이 다섯 달 나오다 한 달 빠지면 그게 구멍이다.
+//
+//  읽는 법
+//     숫자      그 달에 들어간 금액 (만원 단위)
+//     ---       그 달에 한 줄도 없음
+//     ⚠️        앞뒤 달에는 있는데 그 달만 빠짐  ← 이게 구멍
+//
+//  ⚠️ 읽기만 합니다.
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function 지출진단() {
+  var 이번달 = new Date().getMonth() + 1;
+
+  Object.keys(BRANCH_CONFIG).forEach(function (branch) {
+    Logger.log('\n\n ════════════ [' + branch + '] ════════════');
+
+    var sh = SpreadsheetApp.openById(BRANCH_CONFIG[branch].ssId).getSheetByName('지출및매출로그');
+    if (!sh || sh.getLastRow() < 2) { Logger.log('  기록 없음'); return; }
+
+    var v = sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues();
+
+    var 표 = {};        // 분류 → { 1: 금액, 2: 금액, ... }
+    var 건수 = {};      // 분류 → { 1: 줄수, ... }
+
+    v.forEach(function (r) {
+      var cat = String(r[1]).trim();
+      if (!cat) return;
+      if (매출분류_.indexOf(cat) >= 0) return;      // 매출은 날짜진단에서 봄
+
+      var d = toDate_(r[0]);
+      if (!d || d.getFullYear() !== 2026) return;
+      var m = d.getMonth() + 1;
+
+      if (!표[cat]) { 표[cat] = {}; 건수[cat] = {}; }
+      표[cat][m]   = (표[cat][m] || 0) + (Number(r[3]) || 0);
+      건수[cat][m] = (건수[cat][m] || 0) + 1;
+    });
+
+    var 분류들 = Object.keys(표).sort(function (a, b) {
+      var sa = 0, sb = 0;
+      for (var i = 1; i <= 12; i++) { sa += 표[a][i] || 0; sb += 표[b][i] || 0; }
+      return sb - sa;                                // 금액 큰 것부터
+    });
+
+    if (!분류들.length) { Logger.log('  지출 기록이 없습니다'); return; }
+
+    // ── 표 ──────────────────────────────────────────────────
+    var 머리 = '  분류              ';
+    for (var m = 1; m <= 이번달; m++) 머리 += ('  ' + m + '월').slice(-5);
+    머리 += '     올해합계';
+    Logger.log('\n' + 머리);
+    Logger.log('  ' + Array(머리.length - 1).join('─'));
+
+    var 의심 = [];
+
+    분류들.forEach(function (cat) {
+      var 줄 = '  ' + (cat + '                  ').slice(0, 18);
+      var 합 = 0;
+
+      for (var m = 1; m <= 이번달; m++) {
+        var amt = 표[cat][m] || 0;
+        합 += amt;
+        줄 += (amt ? ('     ' + Math.round(amt / 10000)).slice(-5) : '    -');
+      }
+      줄 += '   ' + 합.toLocaleString() + '원';
+      Logger.log(줄);
+
+      // ── 「앞뒤엔 있는데 가운데만 빔」 찾기 ──
+      //    9월은 아직 안 끝났으므로 8월까지만 본다
+      var 마지막 = Math.min(이번달 - 1, 8);
+      for (var m = 2; m <= 마지막; m++) {
+        if (표[cat][m]) continue;
+        var 앞있음 = false, 뒤있음 = false;
+        for (var k = 1; k < m; k++) if (표[cat][k]) 앞있음 = true;
+        for (var k = m + 1; k <= 마지막 + 1; k++) if (표[cat][k]) 뒤있음 = true;
+        if (앞있음 && 뒤있음) 의심.push(cat + ' ' + m + '월');
+      }
+    });
+
+    // ── 요약 ────────────────────────────────────────────────
+    if (의심.length) {
+      Logger.log('\n  🔴 앞뒤 달에는 있는데 그 달만 빠진 것  ' + 의심.length + '건');
+      의심.forEach(function (s) { Logger.log('     ' + s); });
+      Logger.log('     → 영수증을 안 올렸거나, 올렸는데 조용히 버려진 것입니다');
+    } else {
+      Logger.log('\n  ✅ 중간에 빠진 달이 없습니다');
+    }
+
+    // ── 한 번만 나온 분류 (오타·중복 계정 의심) ──────────────
+    var 한번만 = 분류들.filter(function (cat) {
+      var c = 0;
+      for (var m = 1; m <= 12; m++) if (건수[cat][m]) c += 건수[cat][m];
+      return c === 1;
+    });
+    if (한번만.length) {
+      Logger.log('\n  ⚠️ 올해 딱 한 줄만 있는 분류  ' + 한번만.length + '개');
+      Logger.log('     ' + 한번만.join(' · '));
+      Logger.log('     → 계정 이름 오타이거나, 다른 계정과 합쳐야 할 것일 수 있습니다');
+    }
+  });
+
+  Logger.log('\n\n ── 읽는 법 ──');
+  Logger.log('   숫자   그 달 금액 (만원 단위)');
+  Logger.log('   -      그 달에 한 줄도 없음');
+  Logger.log('   🔴     앞뒤 달에는 있는데 그 달만 빠짐 = 구멍일 가능성 높음');
+  Logger.log('\n ※ 9월은 아직 안 끝나서 구멍 판정에서 뺐습니다.');
+  Logger.log(' ※ 읽기만 했습니다.');
+}
