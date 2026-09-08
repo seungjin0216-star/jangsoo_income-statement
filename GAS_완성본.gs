@@ -6064,17 +6064,25 @@ function 시트계정진단() {
     var 라벨 = sh.getRange(1, 2, last, 1).getValues();
     var 수식 = sh.getRange(1, 3, last, 1).getFormulas();
 
+    // ⚠️ 2026-09-07 첫 판에서 3개만 잡혔다. 수식이 분류명을 두 가지 방식으로 넘기기 때문이다.
+    //      ① SUMIFS(..., "주류원가", ...)   따옴표로 직접   ← 인건비·직원급여만 이 방식
+    //      ② SUMIFS(..., $B28, ...)         B열 라벨 참조   ← 대부분 이 방식
+    //    ②를 놓쳐서 「카드매출도 시트가 안 읽는다」는 엉뚱한 결과가 나왔다.
     var 시트계정 = {};   // 분류 → 행이름
     for (var i = 0; i < last; i++) {
       var f = String(수식[i][0] || '');
       if (!f) continue;
+      if (f.indexOf('지출및매출로그') < 0) continue;   // 로그를 읽는 행만
       var 행이름 = String(라벨[i][0] || '').trim();
-      // "주류원가" 처럼 따옴표로 싸인 것만 뽑는다 (셀 주소·함수명은 제외)
+
+      // ② B열을 참조하면 그 행의 라벨이 곧 분류명이다
+      if (/\$?B\$?\d+/.test(f) && 행이름) 시트계정[행이름] = 행이름;
+
+      // ① 따옴표로 직접 적힌 것
       var m2 = f.match(/"([^"]{2,20})"/g);
-      if (!m2) continue;
-      m2.forEach(function (q) {
+      if (m2) m2.forEach(function (q) {
         var cat = q.replace(/"/g, '').trim();
-        if (!cat || /^[A-Z$!:0-9\s]+$/.test(cat)) return;   // 셀 주소류 제외
+        if (!cat || /^[A-Z$!:0-9\s,]+$/.test(cat)) return;
         if (cat.indexOf('!') >= 0) return;
         시트계정[cat] = 행이름 || '(이름 없는 행)';
       });
@@ -6116,6 +6124,25 @@ function 시트계정진단() {
       Logger.log('     ' + (로그계정[c].금액.toLocaleString() + '원          ').slice(0, 14) +
                  (로그계정[c].줄수 + '줄   ').slice(0, 7) + c);
     });
+
+    // ── ④ 줄이 5개 이하인 계정은 내용을 그대로 보여준다 ──
+    //     「공과금 1줄」처럼 뭉뚱그려진 것이 실제로 뭔지 알아야 어디로 묶을지 정한다
+    var 소수 = 고아.filter(function (c) { return 로그계정[c].줄수 <= 5 && 로그계정[c].금액 >= 50000; });
+    if (소수.length && logSh) {
+      Logger.log('\n  ── 줄이 적은 계정의 실제 내용 (어디로 묶을지 정하려고) ──');
+      var vv = logSh.getRange(2, 1, logSh.getLastRow() - 1, 6).getValues();
+      소수.forEach(function (c) {
+        Logger.log('     [' + c + ']');
+        var 찍음 = 0;
+        vv.forEach(function (r) {
+          if (String(r[1]).trim() !== c || 찍음 >= 5) return;
+          var d = toDate_(r[0]);
+          Logger.log('        ' + (d ? Utilities.formatDate(d, TIMEZONE, 'MM-dd') : '??') +
+                     '  ' + (Number(r[3]) || 0).toLocaleString() + '원  ' + String(r[2] || '').slice(0, 30));
+          찍음++;
+        });
+      });
+    }
 
     Logger.log('\n  ※ 「매출·마감정산서·마감정산·정산」은 매출이 잘못 들어간 것입니다.');
     Logger.log('     가게내부카드로 묶으면 안 됩니다. 지워야 합니다.');
