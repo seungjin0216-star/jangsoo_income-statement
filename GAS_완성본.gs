@@ -6201,3 +6201,104 @@ function 시트계정목록() {
   Logger.log('\n\n ※ 읽기만 했습니다.');
   Logger.log(' ※ B열에 적힌 이름이 곧 계정입니다. 여기 없는 것은 전부 정리 대상입니다.');
 }
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  🔍 매출중복진단() — 같은 날 매출이 두 번 들어갔나
+//
+//  2026-09-07 추가.
+//
+//  왜 필요한가
+//    포스 8월 총액은 73,560,000원인데 시트는 82,532,000원이다.
+//    897만원이 더 많다. 포스복원으로 넣은 건 빈 날 10일치뿐이고
+//    기존 줄은 건드리지 않았으니, 기존 21일치가 부풀려져 있다는 뜻이다.
+//
+//    같은 날 같은 분류에 줄이 여러 개면 중복일 가능성이 높다.
+//    ⚠️ 다만 마감정산서가 카드매출을 두 줄(신용카드+간편결제)로 만드는
+//       정상적인 경우도 있으므로, 금액과 항목명을 같이 봐야 한다.
+//
+//  ⚠️ 읽기만 합니다.
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function 매출중복진단() {
+  // 포스에서 뽑은 월 총액 (사장님 캡처 기준)
+  var 포스월합_ = {
+    '원당점': { 1: 68316000, 2: 65062000, 3: 72250000, 4: 70349000,
+                5: 77170000, 6: 65206000, 7: 60380000, 8: 73560000 }
+  };
+
+  Object.keys(BRANCH_CONFIG).forEach(function (branch) {
+    Logger.log('\n\n ════════════ [' + branch + '] ════════════');
+
+    var sh = SpreadsheetApp.openById(BRANCH_CONFIG[branch].ssId).getSheetByName('지출및매출로그');
+    if (!sh || sh.getLastRow() < 2) { Logger.log('  기록 없음'); return; }
+
+    var v = sh.getRange(2, 1, sh.getLastRow() - 1, 6).getValues();
+
+    var 묶음 = {};      // 'yyyy-MM-dd|분류' → [{금액, 항목명, 표식}]
+    var 월합 = {};
+
+    v.forEach(function (r) {
+      var cat = String(r[1]).trim();
+      if (매출분류_.indexOf(cat) < 0) return;
+      var d = toDate_(r[0]);
+      if (!d || d.getFullYear() !== 2026) return;
+
+      var ymd = Utilities.formatDate(d, TIMEZONE, 'yyyy-MM-dd');
+      var key = ymd + '|' + cat;
+      if (!묶음[key]) 묶음[key] = [];
+      묶음[key].push({ 금액: Number(r[3]) || 0, 항목: String(r[2] || ''), 표식: String(r[5] || '') });
+
+      var m = d.getMonth() + 1;
+      월합[m] = (월합[m] || 0) + (Number(r[3]) || 0);
+    });
+
+    // ── ① 포스와 월별 대조 ─────────────────────────────────
+    var 포스 = 포스월합_[branch];
+    if (포스) {
+      Logger.log('\n  월    시트          포스          차이');
+      Logger.log('  ─────────────────────────────────────────────────');
+      for (var m = 1; m <= 8; m++) {
+        var s = 월합[m] || 0, p = 포스[m] || 0;
+        var diff = s - p;
+        Logger.log('  ' + ('  ' + m + '월').slice(-4) + '  ' +
+                   (s.toLocaleString() + '          ').slice(0, 13) + ' ' +
+                   (p.toLocaleString() + '          ').slice(0, 13) + ' ' +
+                   (diff > 0 ? '+' : '') + diff.toLocaleString() +
+                   (Math.abs(diff) > 3000000 ? '  🔴' : ''));
+      }
+      Logger.log('\n  ※ 시트가 조금 많은 것은 배달매출 때문입니다 (포스엔 배달이 안 잡힘)');
+      Logger.log('  ※ 🔴 는 배달로 보기엔 너무 큰 차이입니다');
+    }
+
+    // ── ② 같은 날 같은 분류에 줄이 여럿 ────────────────────
+    var 여럿 = Object.keys(묶음).filter(function (k) { return 묶음[k].length > 1; }).sort();
+
+    Logger.log('\n  ── 같은 날 같은 분류에 줄이 여럿인 것  ' + 여럿.length + '건 ──');
+    if (!여럿.length) {
+      Logger.log('     없습니다');
+    } else {
+      var 합 = 0;
+      여럿.forEach(function (k) { 
+        var arr = 묶음[k];
+        var s = 0;
+        arr.forEach(function (x) { s += x.금액; });
+        합 += s - Math.max.apply(null, arr.map(function (x) { return x.금액; }));
+      });
+      Logger.log('     가장 큰 줄만 남기면 ' + 합.toLocaleString() + '원이 줄어듭니다\n');
+
+      여럿.slice(0, 40).forEach(function (k) {
+        var p = k.split('|');
+        Logger.log('     ' + p[0] + '  ' + p[1]);
+        묶음[k].forEach(function (x) {
+          Logger.log('        ' + (x.금액.toLocaleString() + '원          ').slice(0, 13) +
+                     '  ' + x.항목.slice(0, 24) + '   ' + x.표식.slice(0, 18));
+        });
+      });
+      if (여럿.length > 40) Logger.log('     … 그 외 ' + (여럿.length - 40) + '건');
+    }
+  });
+
+  Logger.log('\n\n ※ 읽기만 했습니다.');
+  Logger.log(' ※ 마감정산서가 카드매출을 신용카드·간편결제 두 줄로 만드는 것은 정상입니다.');
+  Logger.log('    금액과 항목명을 보고 진짜 중복인지 가려야 합니다.');
+}
