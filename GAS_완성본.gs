@@ -6426,14 +6426,20 @@ function 매출중복정리_(dryRun) {
       Logger.log('     ' + (r + '              ').slice(0, 16) + 이유별[r].toLocaleString() + '원');
     });
 
-    if (지울것.length) {
-      Logger.log('\n  ── 지울 줄 (앞에서 30개) ──');
-      지울것.slice(0, 30).forEach(function (x) {
+    // ⚠️ 0원 줄은 수십 개라 목록을 덮어버린다. 건수만 알리고 접는다.
+    //    돈이 실제로 줄어드는 줄은 하나도 빠짐없이 보여준다. 그래야 판단할 수 있다.
+    var 영원줄 = 지울것.filter(function (x) { return x.amt === 0; });
+    var 돈줄   = 지울것.filter(function (x) { return x.amt > 0; });
+
+    if (영원줄.length) Logger.log('\n  0원 줄 ' + 영원줄.length + '개는 목록에서 접었습니다 (합계에 영향 없음)');
+
+    if (돈줄.length) {
+      Logger.log('\n  ── 돈이 줄어드는 줄 ' + 돈줄.length + '개 (전부) ──');
+      돈줄.sort(function (a, b) { return a.ymd < b.ymd ? -1 : 1; }).forEach(function (x) {
         Logger.log('     ' + x.ymd + '  ' + (x.cat + '      ').slice(0, 6) +
                    '  ' + (x.amt.toLocaleString() + '원          ').slice(0, 13) +
                    '  ' + (x.항목 + '                  ').slice(0, 20) + '  ' + x.이유);
       });
-      if (지울것.length > 30) Logger.log('     … 그 외 ' + (지울것.length - 30) + '개');
     }
 
     // ── 월별로 얼마가 줄어드나 ──────────────────────────────
