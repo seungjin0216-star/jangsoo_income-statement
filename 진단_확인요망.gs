@@ -198,7 +198,7 @@ function 구멍날진단() {
       for (var d = 1; d <= 마지막; d++) {
         var day = new Date(2026, mo - 1, d);
         if (day > 오늘) break;
-        if (휴무 !== null && day.getDay() === 휴무) continue;
+        if (쉬는날_(branch, day)) continue;
 
         var key = Utilities.formatDate(day, TIMEZONE, 'yyyy-MM-dd');
         if (있는날[key]) continue;          // 매출 있음 → 구멍 아님
@@ -503,3 +503,248 @@ function 매출복원_되돌리기() {
 
   Logger.log('✅ [포스복원] ' + 지울행.length + '줄 · ' + 합.toLocaleString() + '원을 지웠습니다.');
 }
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  🎌 특별휴무 — 명절처럼 정기 휴무가 아닌 날
+//
+//  2026-09-07 추가.
+//
+//  왜 필요한가
+//    원당은 연중무휴로 계산한다. 그래서 명절에 쉰 날도 「매출이 빈 날」로
+//    잡혀서, 진단을 돌릴 때마다 있지도 않은 구멍을 알렸다.
+//    2월 16·17일을 넉 달 동안 구멍으로 알고 있었다.
+//
+//  ⚠️ 쉬는 날이 생기면 여기에 꼭 적어주세요.
+//     안 적으면 진단이 계속 그날을 「돈이 새는 날」로 알립니다.
+//
+//  명절은 전날·당일 이틀을 쉽니다 (사장님 확인, 2026-09-07)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+var 특별휴무_ = {
+  '백석점': [
+    '2026-02-16',   // 설날 전날 (2/17 설날은 화요일 = 정기휴무라 안 적어도 됨)
+    '2026-09-24',   // 추석 전날
+    '2026-09-25'    // 추석
+  ],
+  '원당점': [
+    '2026-02-16',   // 설날 전날
+    '2026-02-17',   // 설날
+    '2026-07-20',   // 임시 휴무 (사장님 확인)
+    '2026-09-24',   // 추석 전날
+    '2026-09-25'    // 추석
+  ]
+};
+
+// 그날 쉬었나 — 정기휴무 + 특별휴무를 함께 본다
+function 쉬는날_(branch, day) {
+  var 요일휴무 = 휴무요일_[branch];
+  if (요일휴무 !== null && day.getDay() === 요일휴무) return true;
+  var key = Utilities.formatDate(day, TIMEZONE, 'yyyy-MM-dd');
+  return (특별휴무_[branch] || []).indexOf(key) >= 0;
+}
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  📅 사월정리 — 4/30 하루에 뭉친 한 달치를 날짜별로 편다  (원당점)
+//
+//  2026-09-07 추가.
+//
+//  지금 상태
+//    4월 매출 6,486만원이 사실상 4/30 하루에 몰려 있습니다.
+//    (있는 날 4일 / 영업일 30일 — 1·2·3·30일에만 기록)
+//    그때 처리에 문제가 있어 한 달치를 몰아 적으신 것으로 보입니다.
+//
+//  하는 일
+//    ① 4월 카드매출·현금매출 줄을 전부 지웁니다
+//    ② 포스 달력대로 4/1~4/30 을 새로 넣습니다
+//
+//  ⚠️ 배달매출은 건드리지 않습니다. 포스에 배달이 안 잡히기 때문입니다.
+//     지우면 되살릴 방법이 없습니다.
+//
+//  검산
+//    포스 달력 합계   70,130,000원
+//    포스 월 총액     70,349,000원     차이 219,000원 (0.3%, 만원 단위 반올림)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+// 일 → [카드, 현금, 기타]   기타는 카드에 합칩니다
+var 포스4월_원당_ = {
+   1: [1120000, 110000,      0],   2: [2260000,      0,      0],
+   3: [3180000,      0,      0],   4: [2270000, 120000,      0],
+   5: [2920000, 160000,      0],   6: [1400000, 150000,  80000],
+   7: [1920000,      0,      0],   8: [1400000,      0,  50000],
+   9: [1420000, 130000,      0],  10: [2560000,      0,      0],
+  11: [3410000, 200000,  50000],  12: [1970000,  90000,      0],
+  13: [2250000,      0,      0],  14: [1650000,      0,      0],
+  15: [2060000, 100000,      0],  16: [1080000,      0,      0],
+  17: [2670000,  90000,      0],  18: [3090000,      0,      0],
+  19: [3390000,  70000,      0],  20: [2370000,      0,      0],
+  21: [1560000, 100000,      0],  22: [2180000,  40000,      0],
+  23: [1810000,      0,      0],  24: [2660000,      0,      0],
+  25: [3540000,      0, 150000],  26: [2740000,  50000,      0],
+  27: [2120000,      0,      0],  28: [2010000, 220000,      0],
+  29: [2070000,  60000,      0],  30: [2840000, 120000,  70000]
+};
+
+var 사월표식_ = '[포스복원4월]';
+
+
+function 사월정리_미리보기() { 사월정리_(true); }
+function 사월정리_적용()     { 사월정리_(false); }
+
+function 사월정리_(dryRun) {
+  var branch = '원당점';
+  var sh = SpreadsheetApp.openById(BRANCH_CONFIG[branch].ssId).getSheetByName('지출및매출로그');
+  if (!sh || sh.getLastRow() < 2) { Logger.log('❌ 기록이 없습니다'); return; }
+
+  var v = sh.getRange(2, 1, sh.getLastRow() - 1, SHEET_HEADERS.length).getValues();
+
+  // ── ① 지울 것 찾기 ─────────────────────────────────────
+  var 지울행 = [], 지운금액 = 0, 분류별 = {}, 보존 = {};
+
+  for (var i = 0; i < v.length; i++) {
+    var d = toDate_(v[i][0]);
+    if (!d) continue;
+    if (d.getFullYear() !== 2026 || d.getMonth() !== 3) continue;   // 4월만
+
+    var cat = String(v[i][1]).trim();
+    var amt = Number(v[i][3]) || 0;
+
+    if (cat === '카드매출' || cat === '현금매출') {
+      지울행.push({ row: i + 2, ymd: Utilities.formatDate(d, TIMEZONE, 'MM-dd'), cat: cat, amt: amt });
+      지운금액 += amt;
+      분류별[cat] = (분류별[cat] || 0) + amt;
+    } else if (매출분류_.indexOf(cat) >= 0) {
+      보존[cat] = (보존[cat] || 0) + amt;   // 배달매출 등은 그대로 둡니다
+    }
+  }
+
+  // ── ② 넣을 것 만들기 ───────────────────────────────────
+  var 넣을줄 = [], 넣을금액 = 0;
+  var now = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd HH:mm:ss');
+
+  Object.keys(포스4월_원당_).sort(function (a, b) { return a - b; }).forEach(function (day) {
+    var a = 포스4월_원당_[day];
+    var ymd = '2026-04-' + String(day).padStart(2, '0');
+    [['카드매출', a[0] + a[2]], ['현금매출', a[1]]].forEach(function (p) {
+      if (p[1] <= 0) return;
+      넣을줄.push([ymd, p[0], 사월표식_ + ' 포스 달력', p[1], branch, 사월표식_, now, '']);
+      넣을금액 += p[1];
+    });
+  });
+
+  // ── ③ 보여주기 ─────────────────────────────────────────
+  Logger.log('\n ════════ 원당 4월 정리 ════════\n');
+  Logger.log('  지울 것   ' + 지울행.length + '줄 · ' + 지운금액.toLocaleString() + '원');
+  Object.keys(분류별).forEach(function (c) {
+    Logger.log('     ' + c + '  ' + 분류별[c].toLocaleString() + '원');
+  });
+
+  if (Object.keys(보존).length) {
+    Logger.log('\n  그대로 두는 것 (포스에 안 잡히는 매출)');
+    Object.keys(보존).forEach(function (c) {
+      Logger.log('     ' + c + '  ' + 보존[c].toLocaleString() + '원');
+    });
+  }
+
+  Logger.log('\n  ── 지울 줄 (앞에서 10줄) ──');
+  지울행.slice(0, 10).forEach(function (r) {
+    Logger.log('     ' + r.ymd + '  ' + r.cat + '  ' + r.amt.toLocaleString() + '원');
+  });
+  if (지울행.length > 10) Logger.log('     … 그 외 ' + (지울행.length - 10) + '줄');
+
+  Logger.log('\n  넣을 것   ' + 넣을줄.length + '줄 · ' + 넣을금액.toLocaleString() + '원');
+  Logger.log('     4월 1일부터 30일까지 포스 달력 그대로');
+
+  Logger.log('\n  ──────────────────────────────');
+  Logger.log('  결과      ' + 지운금액.toLocaleString() + '원  →  ' + 넣을금액.toLocaleString() + '원');
+  Logger.log('  차이      ' + (넣을금액 - 지운금액).toLocaleString() + '원');
+  Logger.log('  ※ 포스 월 총액은 70,349,000원입니다 (만원 단위 반올림으로 21만원쯤 차이 납니다)');
+
+  if (dryRun) {
+    Logger.log('\n  ※ 미리보기입니다. 아무것도 안 바꿨습니다.');
+    Logger.log('  ※ 실제로 하려면 사월정리_적용() 을 실행하세요.');
+    return;
+  }
+
+  // ── ④ 실행 ─────────────────────────────────────────────
+  // 아래에서부터 지워야 행 번호가 안 밀린다
+  지울행.map(function (r) { return r.row; }).sort(function (a, b) { return b - a; })
+        .forEach(function (row) { sh.deleteRow(row); });
+
+  sh.getRange(sh.getLastRow() + 1, 1, 넣을줄.length, SHEET_HEADERS.length).setValues(넣을줄);
+
+  Logger.log('\n  ✅ ' + 지울행.length + '줄을 지우고 ' + 넣을줄.length + '줄을 넣었습니다.');
+  Logger.log('  항목명에 「' + 사월표식_ + '」 이 붙어 있습니다.');
+  Logger.log('\n  다음: 날짜진단() 으로 4월이 30/30 이 되었는지 보세요.');
+}
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  👷 인건비진단() — 인건비가 어느 달에 얼마로 들어가 있나
+//
+//  2026-09-07 추가. 「8월 인건비를 못 잡고 있다」는 확인 요청 때문입니다.
+//
+//  인건비는 syncLaborCosts 가 매달 1일 날짜로 한 줄씩 넣습니다.
+//  표식은  [자동]인건비_지점_2026-08  형태입니다.
+//
+//  ⚠️ 읽기만 합니다.
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function 인건비진단() {
+  Object.keys(BRANCH_CONFIG).forEach(function (branch) {
+    Logger.log('\n\n ════════════ [' + branch + '] ════════════');
+
+    var sh = SpreadsheetApp.openById(BRANCH_CONFIG[branch].ssId).getSheetByName('지출및매출로그');
+    if (!sh || sh.getLastRow() < 2) { Logger.log('  기록 없음'); return; }
+
+    var v = sh.getRange(2, 1, sh.getLastRow() - 1, SHEET_HEADERS.length).getValues();
+    var 월별 = {};    // 'yyyy-MM' → { 금액, 표식, 줄수 }
+
+    v.forEach(function (r) {
+      var cat = String(r[1]).trim();
+      if (cat !== '인건비' && cat !== '알바급여' && cat !== '직원급여') return;
+      var d = toDate_(r[0]);
+      if (!d) return;
+      var ym = Utilities.formatDate(d, TIMEZONE, 'yyyy-MM');
+      if (!월별[ym]) 월별[ym] = { 금액: 0, 줄수: 0, 분류: {}, 표식: [] };
+      월별[ym].금액 += Number(r[3]) || 0;
+      월별[ym].줄수++;
+      월별[ym].분류[cat] = (월별[ym].분류[cat] || 0) + (Number(r[3]) || 0);
+      var mark = String(r[5] || '').trim();
+      if (mark && 월별[ym].표식.indexOf(mark) < 0 && 월별[ym].표식.length < 3) 월별[ym].표식.push(mark);
+    });
+
+    var 달 = Object.keys(월별).sort();
+    if (!달.length) { Logger.log('  ❌ 인건비 기록이 하나도 없습니다'); return; }
+
+    Logger.log('\n  월        금액              줄수   내역');
+    Logger.log('  ────────────────────────────────────────────────────────');
+
+    // 1월부터 이번 달까지 빠진 달도 보여준다
+    var 오늘 = new Date();
+    for (var m = 1; m <= oel_(오늘); m++) {
+      var ym = '2026-' + String(m).padStart(2, '0');
+      var g = 월별[ym];
+      if (!g) {
+        Logger.log('  ' + ym + '   ❌ 없음');
+        continue;
+      }
+      var 내역 = Object.keys(g.분류).map(function (c) {
+        return c + ' ' + Math.round(g.분류[c] / 10000) + '만';
+      }).join(' · ');
+      Logger.log('  ' + ym + '   ' + (g.금액.toLocaleString() + '원          ').slice(0, 15) +
+                 '  ' + g.줄수 + '줄   ' + 내역);
+    }
+
+    Logger.log('\n  ── 표식 (어떻게 들어갔는지) ──');
+    달.forEach(function (ym) {
+      Logger.log('     ' + ym + '  ' + (월별[ym].표식.join(' / ') || '(표식 없음 — 손으로 넣은 것)'));
+    });
+  });
+
+  Logger.log('\n\n ※ 읽기만 했습니다.');
+  Logger.log(' ※ 「❌ 없음」인 달은 알바계산기에서 그 달 지급완료를 안 눌렀거나,');
+  Logger.log('    인건비_전체동기화_적용() 을 안 돌린 것입니다.');
+}
+
+// 이번 달 번호 (2026년 기준)
+function oel_(d) { return d.getFullYear() > 2026 ? 12 : d.getMonth() + 1; }
