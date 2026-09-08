@@ -1076,3 +1076,54 @@ function 시트계정진단() {
 
   Logger.log('\n\n ※ 읽기만 했습니다.');
 }
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  📋 시트계정목록() — 손익계산서 시트의 B열을 그대로 찍는다
+//
+//  2026-09-07 추가. 시트계정진단() 이 수식을 두 번이나 잘못 읽어서,
+//  아예 사람이 눈으로 보게 만든 것입니다.
+//
+//  사장님 방침 — 「손익계산서에 있는 계정이 전부. 나머지는 가게내부카드」
+//  그 「있는 계정」이 바로 여기 나오는 목록입니다.
+//
+//  ⚠️ 읽기만 합니다.
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function 시트계정목록() {
+  Object.keys(BRANCH_CONFIG).forEach(function (branch) {
+    var ss = SpreadsheetApp.openById(BRANCH_CONFIG[branch].ssId);
+
+    // 8월 시트를 먼저 본다 (9월은 방금 만들어져 수식이 덜 채워졌을 수 있음)
+    var 후보 = ['26년 8월 손익계산서', '26년 7월 손익계산서', '26년 9월 손익계산서'];
+    var sh = null, 이름 = '';
+    for (var i = 0; i < 후보.length; i++) {
+      var t = ss.getSheetByName(후보[i]);
+      if (t) { sh = t; 이름 = 후보[i]; break; }
+    }
+    if (!sh) { Logger.log('[' + branch + '] 월 시트를 못 찾았습니다'); return; }
+
+    Logger.log('\n\n ════════════ [' + branch + '] ' + 이름 + ' ════════════');
+    Logger.log('\n  행   B열 (계정 이름)        C열 값           C열 수식');
+    Logger.log('  ────────────────────────────────────────────────────────────────────────');
+
+    var last = Math.min(sh.getLastRow(), 60);
+    var b  = sh.getRange(1, 2, last, 1).getValues();
+    var c  = sh.getRange(1, 3, last, 1).getDisplayValues();
+    var cf = sh.getRange(1, 3, last, 1).getFormulas();
+
+    for (var r = 0; r < last; r++) {
+      var 이름칸 = String(b[r][0] || '').trim();
+      var 값칸   = String(c[r][0] || '').trim();
+      var 수식칸 = String(cf[r][0] || '').replace(/\s+/g, ' ');
+      if (!이름칸 && !값칸) continue;
+
+      Logger.log('  ' + ('  ' + (r + 1)).slice(-3) + '  ' +
+                 (이름칸 + '                    ').slice(0, 20) + ' ' +
+                 (값칸 + '              ').slice(0, 14) + '  ' +
+                 (수식칸 ? 수식칸.slice(0, 90) : '(수식 없음 — 손으로 적은 값)'));
+    }
+  });
+
+  Logger.log('\n\n ※ 읽기만 했습니다.');
+  Logger.log(' ※ B열에 적힌 이름이 곧 계정입니다. 여기 없는 것은 전부 정리 대상입니다.');
+}
