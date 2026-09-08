@@ -1228,3 +1228,174 @@ function 매출중복진단() {
   Logger.log(' ※ 마감정산서가 카드매출을 신용카드·간편결제 두 줄로 만드는 것은 정상입니다.');
   Logger.log('    금액과 항목명을 보고 진짜 중복인지 가려야 합니다.');
 }
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  🧹 매출중복정리 — 두 번 들어간 매출 줄을 지운다
+//
+//  2026-09-07 추가. 포스 총액과 시트가 안 맞아서 만들었습니다.
+//
+//  ── 무엇을 지우나 ────────────────────────────────────────
+//   1단계  완전히 똑같은 줄
+//          날짜·분류·금액·항목명이 모두 같으면 첫 줄만 남기고 지웁니다.
+//          예) 08-04 카드매출 731,000원 「신용카드」 가 3줄
+//
+//   2단계  달이 어긋난 줄
+//          「[웹앱][마감정산서] 202606」 이라 적혀 있는데 날짜가 5월인 줄.
+//          6월 마감정산서를 5월 날짜로 잘못 읽은 것입니다.
+//          그 달 매출은 이미 제대로 들어가 있으므로 지웁니다.
+//
+//   3단계  0원 줄
+//          금액이 0인 매출 줄. 합계에 영향은 없지만 지저분합니다.
+//
+//  ── 무엇을 안 건드리나 ───────────────────────────────────
+//   ⚠️ 신용카드 + 간편결제처럼 금액이 다른 줄은 진짜 두 건입니다. 안 지웁니다.
+//   ⚠️ 카드사별로 나뉜 줄(BC·국민·삼성…)도 정상입니다.
+//   ⚠️ 지출이 매출로 잘못 분류된 것(과일야채싸게파는집 등)은
+//      목록만 보여주고 자동으로 안 고칩니다. 판단이 필요합니다.
+//
+//  ⚠️ 되돌리기가 없습니다. 지운 줄은 로그에 남기니 필요하면 손으로 복구하세요.
+//     그래서 미리보기를 반드시 먼저 보셔야 합니다.
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+function 매출중복정리_미리보기() { 매출중복정리_(true); }
+function 매출중복정리_적용()     { 매출중복정리_(false); }
+
+function 매출중복정리_(dryRun) {
+  Object.keys(BRANCH_CONFIG).forEach(function (branch) {
+    Logger.log('\n\n ════════════ [' + branch + '] ════════════');
+
+    var sh = SpreadsheetApp.openById(BRANCH_CONFIG[branch].ssId).getSheetByName('지출및매출로그');
+    if (!sh || sh.getLastRow() < 2) { Logger.log('  기록 없음'); return; }
+
+    var v = sh.getRange(2, 1, sh.getLastRow() - 1, 6).getValues();
+
+    var 지울것 = [];      // { row, 이유, ymd, cat, amt, 항목 }
+    var 본것   = {};      // 'ymd|분류|금액|항목' → 이미 봤음
+    var 의심   = [];      // 지출이 매출로 잘못 분류된 것
+
+    for (var i = 0; i < v.length; i++) {
+      var cat = String(v[i][1]).trim();
+      if (매출분류_.indexOf(cat) < 0) continue;
+
+      var d = toDate_(v[i][0]);
+      if (!d) continue;
+      var ymd  = Utilities.formatDate(d, TIMEZONE, 'yyyy-MM-dd');
+      var amt  = Number(v[i][3]) || 0;
+      var 항목 = String(v[i][2] || '').trim();
+      var 표식 = String(v[i][5] || '').trim();
+      var row  = i + 2;
+
+      // ── 3단계: 0원 ──
+      if (amt === 0) {
+        지울것.push({ row: row, 이유: '0원', ymd: ymd, cat: cat, amt: amt, 항목: 항목 });
+        continue;
+      }
+
+      // ── 2단계: 달이 어긋난 줄 ──
+      //    표식에서 「마감정산서] 202606」 같은 연월을 뽑아 날짜의 연월과 비교
+      var mm = 표식.match(/(20\d{2})(\d{2})/);
+      if (mm) {
+        var 표식연월 = mm[1] + '-' + mm[2];
+        var 날짜연월 = ymd.slice(0, 7);
+        if (표식연월 !== 날짜연월) {
+          지울것.push({ row: row, 이유: '달어긋남(' + 표식연월 + '것이 ' + 날짜연월 + '에)',
+                       ymd: ymd, cat: cat, amt: amt, 항목: 항목 });
+          continue;
+        }
+      }
+
+      // ── 1단계: 완전히 똑같은 줄 ──
+      var key = ymd + '|' + cat + '|' + amt + '|' + 항목;
+      if (본것[key]) {
+        지울것.push({ row: row, 이유: '똑같은 줄 반복', ymd: ymd, cat: cat, amt: amt, 항목: 항목 });
+        continue;
+      }
+      본것[key] = true;
+
+      // ── 참고: 지출로 보이는 매출 줄 ──
+      //    항목명이 분류명과 다르고 업체 이름 같으면 의심
+      if (amt < 200000 && 항목 &&
+          항목.indexOf('매출') < 0 && 항목.indexOf('카드') < 0 &&
+          항목.indexOf('현금') < 0 && 항목.indexOf('결제') < 0) {
+        의심.push({ ymd: ymd, cat: cat, amt: amt, 항목: 항목 });
+      }
+    }
+
+    // ── 보여주기 ────────────────────────────────────────────
+    var 이유별 = {}, 총액 = 0;
+    지울것.forEach(function (x) {
+      이유별[x.이유.split('(')[0]] = (이유별[x.이유.split('(')[0]] || 0) + x.amt;
+      총액 += x.amt;
+    });
+
+    Logger.log('\n  지울 줄 ' + 지울것.length + '개 · ' + 총액.toLocaleString() + '원\n');
+    Object.keys(이유별).forEach(function (r) {
+      Logger.log('     ' + (r + '              ').slice(0, 16) + 이유별[r].toLocaleString() + '원');
+    });
+
+    if (지울것.length) {
+      Logger.log('\n  ── 지울 줄 (앞에서 30개) ──');
+      지울것.slice(0, 30).forEach(function (x) {
+        Logger.log('     ' + x.ymd + '  ' + (x.cat + '      ').slice(0, 6) +
+                   '  ' + (x.amt.toLocaleString() + '원          ').slice(0, 13) +
+                   '  ' + (x.항목 + '                  ').slice(0, 20) + '  ' + x.이유);
+      });
+      if (지울것.length > 30) Logger.log('     … 그 외 ' + (지울것.length - 30) + '개');
+    }
+
+    // ── 월별로 얼마가 줄어드나 ──────────────────────────────
+    var 월별 = {};
+    지울것.forEach(function (x) {
+      var m = Number(x.ymd.slice(5, 7));
+      월별[m] = (월별[m] || 0) + x.amt;
+    });
+    if (Object.keys(월별).length) {
+      Logger.log('\n  ── 월별로 줄어드는 금액 ──');
+      Object.keys(월별).sort(function (a, b) { return a - b; }).forEach(function (m) {
+        Logger.log('     ' + m + '월   -' + 월별[m].toLocaleString() + '원');
+      });
+    }
+
+    // ── 참고 목록 ───────────────────────────────────────────
+    if (의심.length) {
+      Logger.log('\n  ── ⚠️ 지출인데 매출로 들어간 듯한 줄  ' + 의심.length + '개 ──');
+      Logger.log('     (자동으로 안 건드립니다. 눈으로 보고 판단하세요)');
+      var 의심합 = 0;
+      의심.forEach(function (x) { 의심합 += x.amt; });
+      Logger.log('     합계 ' + 의심합.toLocaleString() + '원\n');
+      의심.slice(0, 25).forEach(function (x) {
+        Logger.log('        ' + x.ymd + '  ' + (x.cat + '      ').slice(0, 6) +
+                   '  ' + (x.amt.toLocaleString() + '원        ').slice(0, 11) + '  ' + x.항목.slice(0, 26));
+      });
+      if (의심.length > 25) Logger.log('        … 그 외 ' + (의심.length - 25) + '개');
+    }
+
+    if (dryRun) {
+      Logger.log('\n  ※ 미리보기입니다. 아무것도 안 지웠습니다.');
+      return;
+    }
+
+    if (!지울것.length) { Logger.log('\n  지울 것이 없습니다.'); return; }
+
+    // ── 실제 삭제 ───────────────────────────────────────────
+    // ⚠️ 지운 줄을 로그에 남긴다. 되돌릴 때 필요하다.
+    Logger.log('\n  ── 지운 줄 전체 기록 (되돌릴 때 쓰세요) ──');
+    지울것.forEach(function (x) {
+      Logger.log('     ' + x.ymd + '\t' + x.cat + '\t' + x.amt + '\t' + x.항목);
+    });
+
+    지울것.map(function (x) { return x.row; })
+          .sort(function (a, b) { return b - a; })      // 아래에서부터
+          .forEach(function (row) { sh.deleteRow(row); });
+
+    Logger.log('\n  ✅ ' + 지울것.length + '줄 · ' + 총액.toLocaleString() + '원을 지웠습니다.');
+  });
+
+  if (dryRun) {
+    Logger.log('\n\n ※ 실제로 지우려면 매출중복정리_적용() 을 실행하세요.');
+    Logger.log(' ⚠️ 되돌리기 기능이 없습니다. 위 목록을 꼭 확인하세요.');
+  } else {
+    Logger.log('\n\n 다음: 매출중복진단() 으로 포스와 맞는지 다시 보세요.');
+  }
+}
