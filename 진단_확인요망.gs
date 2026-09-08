@@ -748,3 +748,85 @@ function 인건비진단() {
 
 // 이번 달 번호 (2026년 기준)
 function oel_(d) { return d.getFullYear() > 2026 ? 12 : d.getMonth() + 1; }
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  🧾 인건비시트진단() — 손익계산서 「시트」에 급여가 얼마로 적혀 있나
+//
+//  2026-09-07 추가.
+//
+//  왜 또 만드나
+//    인건비진단() 은 「지출및매출로그」만 봤다. 그래서 1~4월이 「없음」으로 나왔다.
+//    ⚠️ 그런데 앱이 생기기 전에는 손으로 시트에 적으셨다. (사장님 확인)
+//       로그에 없는 게 정상이고, 시트에는 값이 있어야 한다.
+//       그걸 확인 안 하고 「인건비가 통째로 없다」고 보고한 것은 내 잘못이다.
+//
+//  이 함수는 시트의 「알바급여」·「직원급여」 행을 직접 읽는다.
+//  같은 자리에 수식이 들어 있는지(=로그를 읽는지) 값이 박혀 있는지(=수기)도 구분한다.
+//
+//  읽는 법
+//     수기      손으로 적은 값. 앱 이전 달이면 정상
+//     로그참조   수식이 로그를 읽는 것. 앱 이후 달이면 정상
+//     0원 · 빈칸 ⚠️ 진짜 구멍
+//
+//  ⚠️ 읽기만 합니다.
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function 인건비시트진단() {
+  Object.keys(BRANCH_CONFIG).forEach(function (branch) {
+    Logger.log('\n\n ════════════ [' + branch + '] ════════════');
+
+    var ss = SpreadsheetApp.openById(BRANCH_CONFIG[branch].ssId);
+
+    Logger.log('\n  월      알바급여                    직원급여');
+    Logger.log('  ──────────────────────────────────────────────────────────────');
+
+    var 합 = { 알바: 0, 직원: 0 };
+    var 빈달 = [];
+
+    for (var m = 1; m <= 12; m++) {
+      var sh = ss.getSheetByName('26년 ' + m + '월 손익계산서');
+      if (!sh) continue;
+
+      var 칸 = [];
+      PAYROLL_RULES.forEach(function (rule) {
+        var row = findLabelRow_(sh, rule.label);
+        if (row < 0) { 칸.push('(행 없음)'); return; }
+
+        var cell    = sh.getRange(row, 3);          // C열
+        var 수식    = cell.getFormula();
+        var 표시    = cell.getDisplayValue();
+        var 값      = Number(String(표시).replace(/[^0-9.-]/g, '')) || 0;
+
+        var 방식 = 수식 ? (수식.indexOf('지출및매출로그') >= 0 || 수식.indexOf('SUMIFS') >= 0
+                          ? '로그참조' : '수식')
+                       : '수기';
+
+        if (rule.label === '알바급여') 합.알바 += 값; else 합.직원 += 값;
+        if (값 === 0) 빈달.push(m + '월 ' + rule.label);
+
+        칸.push((값 ? 값.toLocaleString() + '원' : '⚠️ 0원') + ' (' + 방식 + ')');
+      });
+
+      Logger.log('  ' + ('  ' + m + '월').slice(-4) + '   ' +
+                 ((칸[0] || '') + '                        ').slice(0, 26) + '  ' + (칸[1] || ''));
+    }
+
+    Logger.log('\n  ──────────────────────────────');
+    Logger.log('  올해 알바급여 합계   ' + 합.알바.toLocaleString() + '원');
+    Logger.log('  올해 직원급여 합계   ' + 합.직원.toLocaleString() + '원');
+
+    if (빈달.length) {
+      Logger.log('\n  ⚠️ 0원인 칸  ' + 빈달.length + '개');
+      Logger.log('     ' + 빈달.join(' · '));
+      Logger.log('     (백석은 직원이 없으므로 「직원급여 0원」이 정상입니다)');
+    } else {
+      Logger.log('\n  ✅ 0원인 칸이 없습니다');
+    }
+  });
+
+  Logger.log('\n\n ── 읽는 법 ──');
+  Logger.log('   수기      손으로 적은 값. 앱 쓰기 전(1~4월)이면 정상입니다');
+  Logger.log('   로그참조   수식이 지출및매출로그를 읽습니다. 앱 이후 달의 정상 모습입니다');
+  Logger.log('   ⚠️ 0원    진짜 구멍입니다');
+  Logger.log('\n ※ 읽기만 했습니다.');
+}
