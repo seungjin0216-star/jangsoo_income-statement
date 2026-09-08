@@ -948,3 +948,104 @@ function 지출진단() {
   Logger.log('\n ※ 9월은 아직 안 끝나서 구멍 판정에서 뺐습니다.');
   Logger.log(' ※ 읽기만 했습니다.');
 }
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  🔗 시트계정진단() — 손익계산서 시트가 실제로 읽는 계정은 무엇인가
+//
+//  2026-09-07 추가.
+//
+//  왜 필요한가
+//    로그에 원당 계정이 65개나 쌓여 있다. AI 가 영수증에 적힌 단어를
+//    그대로 계정 이름으로 써버린 탓이다 (매입·구매·쇼핑·약국·편의점…).
+//
+//    그런데 손익계산서 시트는 정해진 계정만 SUMIFS 로 읽는다.
+//    시트가 안 읽는 계정은 로그에만 쌓이고 손익에는 영향이 없다.
+//    그 둘을 갈라야 「진짜 1억 손해」인지 「그냥 지저분한 것」인지 알 수 있다.
+//
+//  사장님 방침 (2026-09-07)
+//    「손익계산서에 있는 계정이 전부다. 나머지 짜잘한 것은 가게내부카드로 묶는다」
+//
+//  ⚠️ 읽기만 합니다.
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function 시트계정진단() {
+  Object.keys(BRANCH_CONFIG).forEach(function (branch) {
+    Logger.log('\n\n ════════════ [' + branch + '] ════════════');
+
+    var ss = SpreadsheetApp.openById(BRANCH_CONFIG[branch].ssId);
+
+    // 가장 최근에 있는 월 시트를 고른다 (8월 → 7월 → …)
+    var sh = null, 시트이름 = '';
+    for (var m = 12; m >= 1; m--) {
+      var t = ss.getSheetByName('26년 ' + m + '월 손익계산서');
+      if (t) { sh = t; 시트이름 = '26년 ' + m + '월 손익계산서'; break; }
+    }
+    if (!sh) { Logger.log('  월 시트를 못 찾았습니다'); return; }
+
+    Logger.log('  기준 시트: ' + 시트이름 + '\n');
+
+    // ── ① 시트가 읽는 계정 모으기 ───────────────────────────
+    //     C열 수식 안의 따옴표 문자열이 곧 분류명이다
+    var last = Math.min(sh.getLastRow(), 60);
+    var 라벨 = sh.getRange(1, 2, last, 1).getValues();
+    var 수식 = sh.getRange(1, 3, last, 1).getFormulas();
+
+    var 시트계정 = {};   // 분류 → 행이름
+    for (var i = 0; i < last; i++) {
+      var f = String(수식[i][0] || '');
+      if (!f) continue;
+      var 행이름 = String(라벨[i][0] || '').trim();
+      // "주류원가" 처럼 따옴표로 싸인 것만 뽑는다 (셀 주소·함수명은 제외)
+      var m2 = f.match(/"([^"]{2,20})"/g);
+      if (!m2) continue;
+      m2.forEach(function (q) {
+        var cat = q.replace(/"/g, '').trim();
+        if (!cat || /^[A-Z$!:0-9\s]+$/.test(cat)) return;   // 셀 주소류 제외
+        if (cat.indexOf('!') >= 0) return;
+        시트계정[cat] = 행이름 || '(이름 없는 행)';
+      });
+    }
+
+    // ── ② 로그에 쌓인 계정 모으기 ───────────────────────────
+    var logSh = ss.getSheetByName('지출및매출로그');
+    var 로그계정 = {};
+    if (logSh && logSh.getLastRow() > 1) {
+      var v = logSh.getRange(2, 1, logSh.getLastRow() - 1, 4).getValues();
+      v.forEach(function (r) {
+        var cat = String(r[1]).trim();
+        if (!cat) return;
+        if (!로그계정[cat]) 로그계정[cat] = { 금액: 0, 줄수: 0 };
+        로그계정[cat].금액 += Number(r[3]) || 0;
+        로그계정[cat].줄수++;
+      });
+    }
+
+    // ── ③ 대조 ──────────────────────────────────────────────
+    Logger.log('  ── 시트가 읽는 계정 ' + Object.keys(시트계정).length + '개 ──');
+    Object.keys(시트계정).sort().forEach(function (cat) {
+      var g = 로그계정[cat];
+      Logger.log('     ' + (cat + '                ').slice(0, 16) +
+                 ' → ' + (시트계정[cat] + '              ').slice(0, 14) +
+                 (g ? '  로그 ' + g.금액.toLocaleString() + '원' : '  ⚠️ 로그에 한 줄도 없음'));
+    });
+
+    var 고아 = Object.keys(로그계정).filter(function (c) { return !시트계정[c]; });
+    고아.sort(function (a, b) { return 로그계정[b].금액 - 로그계정[a].금액; });
+
+    var 고아합 = 0;
+    고아.forEach(function (c) { 고아합 += 로그계정[c].금액; });
+
+    Logger.log('\n  ── 🔴 로그엔 있는데 시트가 안 읽는 계정 ' + 고아.length + '개 ──');
+    Logger.log('     합계 ' + 고아합.toLocaleString() + '원   (손익 어디에도 안 잡히는 돈입니다)');
+    Logger.log('');
+    고아.forEach(function (c) {
+      Logger.log('     ' + (로그계정[c].금액.toLocaleString() + '원          ').slice(0, 14) +
+                 (로그계정[c].줄수 + '줄   ').slice(0, 7) + c);
+    });
+
+    Logger.log('\n  ※ 「매출·마감정산서·마감정산·정산」은 매출이 잘못 들어간 것입니다.');
+    Logger.log('     가게내부카드로 묶으면 안 됩니다. 지워야 합니다.');
+  });
+
+  Logger.log('\n\n ※ 읽기만 했습니다.');
+}
