@@ -1515,3 +1515,100 @@ function 지정줄삭제_(dryRun) {
   Logger.log('\n  ✅ ' + 찾음.length + '줄 · ' + 합.toLocaleString() + '원을 지웠습니다.');
   Logger.log('  다음: 매출중복진단() 으로 확인하세요.');
 }
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  💾 알바백업진단() — 알바 데이터 백업이 진짜로 쌓이고 있나
+//
+//  2026-09-07 추가.
+//
+//  왜 필요한가
+//    알바계산기는 직원 10명치 데이터를 시트 A1 「한 칸」에 통째로 넣는다.
+//    그 칸이 지워지면 전부 사라지고 되돌릴 방법이 없다.
+//    (2026-08-26 백엔드가 손익계산서 코드로 덮인 사고 때 확인)
+//
+//    그래서 dailyProcess 에 알바데이터_백업() 을 넣어뒀는데,
+//    ⚠️ 진짜로 쌓이고 있는지는 한 번도 확인한 적이 없다.
+//    「백업이 있다고 믿는데 실은 없는 것」이 가장 나쁜 상태다.
+//
+//  ⚠️ 읽기만 합니다.
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function 알바백업진단() {
+  var ss = SpreadsheetApp.openById(BRANCH_CONFIG['백석점'].ssId);
+  var sh = ss.getSheetByName(ALBA_BACKUP_TAB);
+
+  Logger.log('\n ════════ 알바 데이터 백업 상태 ════════\n');
+
+  if (!sh) {
+    Logger.log('  ❌ 백업 탭(「' + ALBA_BACKUP_TAB + '」)이 아예 없습니다.');
+    Logger.log('     dailyProcess 가 한 번도 백업을 못 했다는 뜻입니다.');
+    Logger.log('     → 알바데이터_백업() 을 손으로 한 번 실행해보세요.');
+    return;
+  }
+
+  var last = sh.getLastRow();
+  if (last < 2) {
+    Logger.log('  ❌ 탭은 있는데 한 줄도 안 쌓였습니다.');
+    Logger.log('     → 알바데이터_백업() 을 손으로 실행해서 오류를 보세요.');
+    return;
+  }
+
+  var n = last - 1;
+  var v = sh.getRange(2, 1, n, 5).getValues();
+
+  Logger.log('  ✅ 백업 ' + n + '개가 쌓여 있습니다  (최대 ' + ALBA_BACKUP_KEEP + '개 보관)\n');
+  Logger.log('  백업시각                 지점  알바  지급   글자수');
+  Logger.log('  ────────────────────────────────────────────────────');
+
+  // 최근 10개
+  var 시작 = Math.max(0, n - 10);
+  for (var i = 시작; i < n; i++) {
+    Logger.log('  ' + (String(v[i][0]) + '                    ').slice(0, 22) +
+               ('   ' + v[i][1]).slice(-4) +
+               ('    ' + v[i][2]).slice(-5) +
+               ('     ' + v[i][3]).slice(-6) +
+               ('        ' + Number(v[i][4]).toLocaleString()).slice(-9));
+  }
+
+  // ── 마지막 백업이 언제인가 ──────────────────────────────
+  var 마지막 = String(v[n - 1][0]);
+  var md = new Date(마지막.replace(/-/g, '/'));
+  var 며칠 = Math.floor((new Date() - md) / (24 * 60 * 60 * 1000));
+
+  Logger.log('\n  마지막 백업   ' + 마지막 + '  (' + 며칠 + '일 전)');
+  if (며칠 >= 3) {
+    Logger.log('  ⚠️ 사흘 넘게 안 쌓였습니다. dailyProcess 가 멈췄거나 알바계산기가 응답을 안 합니다.');
+  } else {
+    Logger.log('  ✅ 잘 돌고 있습니다.');
+  }
+
+  // ── 내용이 진짜인가 ─────────────────────────────────────
+  var 마지막알바 = Number(v[n - 1][2]) || 0;
+  var 마지막지급 = Number(v[n - 1][3]) || 0;
+  var 마지막글자 = Number(v[n - 1][4]) || 0;
+
+  Logger.log('\n  ── 마지막 백업 내용 ──');
+  Logger.log('     알바 ' + 마지막알바 + '명 · 지급기록 ' + 마지막지급 + '건 · ' + 마지막글자.toLocaleString() + '자');
+
+  if (마지막알바 === 0 || 마지막글자 < 500) {
+    Logger.log('     ❌ 껍데기입니다. 이걸로는 복구가 안 됩니다.');
+  } else {
+    Logger.log('     ✅ 진짜 데이터입니다. 이걸로 되돌릴 수 있습니다.');
+  }
+
+  // ── 한도에 가까운가 ─────────────────────────────────────
+  var 한도 = CHUNK_SIZE * CHUNK_COLS;
+  var 비율 = Math.round(마지막글자 / 한도 * 100);
+  Logger.log('\n  담을 수 있는 한도의 ' + 비율 + '% 를 쓰고 있습니다  (' +
+             마지막글자.toLocaleString() + ' / ' + 한도.toLocaleString() + '자)');
+  if (비율 > 80) {
+    Logger.log('  ⚠️ 한도에 가깝습니다. CHUNK_COLS 를 늘려야 합니다. 넘으면 백업이 조용히 멈춥니다.');
+  }
+
+  Logger.log('\n\n ── 되돌리는 법 (실제로 날아갔을 때) ──');
+  Logger.log('   1  「' + ALBA_BACKUP_TAB + '」 탭에서 되살릴 날짜 줄을 찾습니다');
+  Logger.log('   2  그 줄의 JSON1~JSON5 칸을 순서대로 이어 붙입니다');
+  Logger.log('   3  알바계산기 시트의 A1 에 붙여넣습니다');
+  Logger.log('   ⚠️ 붙여넣기 전에 지금 A1 값을 다른 곳에 복사해 두세요');
+  Logger.log('\n ※ 읽기만 했습니다.');
+}
