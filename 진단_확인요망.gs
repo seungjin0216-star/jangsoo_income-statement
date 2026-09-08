@@ -1431,3 +1431,87 @@ function 매출중복정리_(dryRun) {
     Logger.log('\n\n 다음: 매출중복진단() 으로 포스와 맞는지 다시 보세요.');
   }
 }
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  ✂️ 지정줄삭제 — 사장님이 눈으로 확인한 줄만 지운다  (원당점)
+//
+//  2026-09-07 추가.
+//
+//  자동 판정으로는 못 가리는 것들이 있다. 마감정산서가 통째로 두 번
+//  들어왔는데 금액이 서로 다르면 「똑같은 줄 반복」에도 안 걸리고
+//  「달어긋남」에도 안 걸린다. 사장님이 실제 장부를 보고 확인해주신
+//  것만 여기 적어서 지운다.
+//
+//  ── 2026-09-07 사장님 확인 ──────────────────────────────
+//    01-06  현금매출은 48,000원이 맞다        → 2,100,000원 줄 삭제
+//    02-19  카드매출은 2,216,000원이 맞다     → 1,526,000원 줄 삭제
+//    02-19  현금매출은   401,000원이 맞다     →   100,000원 줄 삭제
+//
+//  ⚠️ 날짜·분류·금액이 셋 다 맞아야 지웁니다. 하나라도 다르면 안 지우고 알립니다.
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+var 지정삭제_원당_ = [
+  { ymd: '2026-01-06', cat: '현금매출', amt: 2100000, 사유: '1/6 현금은 48,000원이 맞음' },
+  { ymd: '2026-02-19', cat: '카드매출', amt: 1526000, 사유: '2/19 카드는 2,216,000원이 맞음' },
+  { ymd: '2026-02-19', cat: '현금매출', amt:  100000, 사유: '2/19 현금은 401,000원이 맞음' }
+];
+
+function 지정줄삭제_미리보기() { 지정줄삭제_(true); }
+function 지정줄삭제_적용()     { 지정줄삭제_(false); }
+
+function 지정줄삭제_(dryRun) {
+  var branch = '원당점';
+  var sh = SpreadsheetApp.openById(BRANCH_CONFIG[branch].ssId).getSheetByName('지출및매출로그');
+  if (!sh || sh.getLastRow() < 2) { Logger.log('❌ 기록 없음'); return; }
+
+  var v = sh.getRange(2, 1, sh.getLastRow() - 1, 6).getValues();
+  var 찾음 = [], 못찾음 = [];
+
+  지정삭제_원당_.forEach(function (t) {
+    var hit = null;
+    for (var i = 0; i < v.length; i++) {
+      var d = toDate_(v[i][0]);
+      if (!d) continue;
+      if (Utilities.formatDate(d, TIMEZONE, 'yyyy-MM-dd') !== t.ymd) continue;
+      if (String(v[i][1]).trim() !== t.cat) continue;
+      if ((Number(v[i][3]) || 0) !== t.amt) continue;
+      hit = { row: i + 2, 항목: String(v[i][2] || ''), 표식: String(v[i][5] || '') };
+      break;
+    }
+    if (hit) 찾음.push({ t: t, hit: hit });
+    else 못찾음.push(t);
+  });
+
+  Logger.log('\n ════════ 지정줄삭제 [' + branch + '] ════════\n');
+
+  var 합 = 0;
+  찾음.forEach(function (x) {
+    합 += x.t.amt;
+    Logger.log('  ✅ ' + x.t.ymd + '  ' + x.t.cat + '  ' + x.t.amt.toLocaleString() + '원' +
+               '  (' + x.hit.항목 + ')');
+    Logger.log('        ' + x.t.사유);
+  });
+
+  못찾음.forEach(function (t) {
+    Logger.log('  ❌ 못 찾음: ' + t.ymd + '  ' + t.cat + '  ' + t.amt.toLocaleString() + '원');
+    Logger.log('        이미 지워졌거나 금액이 다릅니다');
+  });
+
+  Logger.log('\n  지울 것 ' + 찾음.length + '줄 · ' + 합.toLocaleString() + '원');
+  Logger.log('\n  적용 뒤 예상');
+  Logger.log('     1월  70,578,130 → 68,478,130   포스 68,316,000   +162,130');
+  Logger.log('     2월  66,908,500 → 65,282,500   포스 65,062,000   +220,500');
+
+  if (dryRun) {
+    Logger.log('\n  ※ 미리보기입니다. 실제로 하려면 지정줄삭제_적용() 을 실행하세요.');
+    return;
+  }
+  if (!찾음.length) { Logger.log('\n  지울 것이 없습니다.'); return; }
+
+  찾음.map(function (x) { return x.hit.row; })
+      .sort(function (a, b) { return b - a; })
+      .forEach(function (row) { sh.deleteRow(row); });
+
+  Logger.log('\n  ✅ ' + 찾음.length + '줄 · ' + 합.toLocaleString() + '원을 지웠습니다.');
+  Logger.log('  다음: 매출중복진단() 으로 확인하세요.');
+}
