@@ -1728,8 +1728,17 @@ function 고기값복원_(dryRun) {
 
   var v = sh.getRange(2, 1, sh.getLastRow() - 1, SHEET_HEADERS.length).getValues();
 
-  // ── ① 지울 것 : 2026년 1~8월 고기값 계열 ──
-  var 지울것 = [], 지운합 = 0;
+  // ── ① 지울 것 : 2026년 1~8월 「진짜 고기값」 줄만 ──
+  //
+  //  ⚠️ 2026-09-11 첫 판에서 택배비까지 지울 뻔했습니다.
+  //     분류가 「고기값」인데 항목명이 「택배비」인 줄이 있었습니다 (3·4월 261만원).
+  //     수기 손익계산서에도 택배비는 고기값과 별개 항목입니다.
+  //     그래서 항목명까지 보고 가립니다.
+  //
+  //  ⚠️ 업체 이름이 적힌 줄(호산축산·정강축산 등)도 안 지웁니다.
+  //     그래프 값에 포함됐는지 알 수 없어서, 지우면 사라지고 안 지우면 중복입니다.
+  //     소액이라 남겨두고 눈으로 판단하시는 게 낫습니다.
+  var 지울것 = [], 지운합 = 0, 남길것 = [];
   for (var i = 0; i < v.length; i++) {
     var cat = String(v[i][1]).trim();
     if (cat.indexOf('고기') < 0 && cat.indexOf('육류') < 0) continue;
@@ -1737,9 +1746,17 @@ function 고기값복원_(dryRun) {
     if (!d || d.getFullYear() !== 2026) continue;
     var m = d.getMonth() + 1;
     if (m > 8) continue;                       // 9월부터는 자동계상이라 안 건드린다
-    var amt = Number(v[i][3]) || 0;
-    지울것.push({ row: i + 2, ymd: Utilities.formatDate(d, TIMEZONE, 'yyyy-MM-dd'),
-                 cat: cat, amt: amt, 항목: String(v[i][2] || '') });
+    var amt  = Number(v[i][3]) || 0;
+    var 항목 = String(v[i][2] || '').trim();
+    var ymd  = Utilities.formatDate(d, TIMEZONE, 'yyyy-MM-dd');
+
+    // 항목명이 「고기값」 계열인 줄만 갈아끼운다
+    var 진짜고기값 = (항목.indexOf('고기') >= 0 || 항목.indexOf('육류') >= 0);
+    if (!진짜고기값) {
+      남길것.push({ ymd: ymd, cat: cat, amt: amt, 항목: 항목 });
+      continue;
+    }
+    지울것.push({ row: i + 2, ymd: ymd, cat: cat, amt: amt, 항목: 항목 });
     지운합 += amt;
   }
 
@@ -1761,6 +1778,15 @@ function 고기값복원_(dryRun) {
     Logger.log('     ' + x.ymd + '  ' + (x.amt.toLocaleString() + '원          ').slice(0, 14) +
                '  ' + x.항목.slice(0, 28));
   });
+
+  if (남길것.length) {
+    Logger.log('\n  ⚠️ 분류는 고기값인데 내용이 다른 줄 ' + 남길것.length + '개 — 안 건드립니다');
+    남길것.forEach(function (x) {
+      Logger.log('     ' + x.ymd + '  ' + (x.amt.toLocaleString() + '원          ').slice(0, 14) +
+                 '  ' + x.항목.slice(0, 28));
+    });
+    Logger.log('     → 택배비는 별도 항목입니다. 업체 이름 줄은 그래프에 포함됐는지 확인이 필요합니다.');
+  }
 
   Logger.log('\n  넣을 것   ' + 넣을줄.length + '줄 · ' + 넣을합.toLocaleString() + '원');
   넣을줄.forEach(function (r) {
