@@ -1620,3 +1620,70 @@ function 알바백업진단() {
   Logger.log('   ⚠️ 붙여넣기 전에 지금 A1 값을 다른 곳에 복사해 두세요');
   Logger.log('\n ※ 읽기만 했습니다.');
 }
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  🥩 고기값진단() — 지금 시트에 고기값이 어떻게 들어 있나
+//
+//  2026-09-11 추가. 사장님이 주신 월별 고기값 그래프와 맞춰보기 위해서입니다.
+//
+//  ⚠️ 읽기만 합니다.
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function 고기값진단() {
+  // 사장님이 주신 월별 고기값 (2026-09-11 그래프 캡처 기준)
+  var 실제_원당_ = { 1:10500000, 2:9580000, 3:11170000, 4:12570000,
+                    5:12630000, 6:14240000, 7:12740000, 8:11150000 };
+
+  Object.keys(BRANCH_CONFIG).forEach(function (branch) {
+    Logger.log('\n\n ════════════ [' + branch + '] ════════════');
+
+    var sh = SpreadsheetApp.openById(BRANCH_CONFIG[branch].ssId).getSheetByName('지출및매출로그');
+    if (!sh || sh.getLastRow() < 2) { Logger.log('  기록 없음'); return; }
+
+    var v = sh.getRange(2, 1, sh.getLastRow() - 1, 6).getValues();
+    var 줄 = [], 월별 = {};
+
+    v.forEach(function (r) {
+      var cat = String(r[1]).trim();
+      if (cat.indexOf('고기') < 0 && cat.indexOf('육류') < 0) return;
+      var d = toDate_(r[0]);
+      if (!d || d.getFullYear() !== 2026) return;
+      var m = d.getMonth() + 1;
+      var amt = Number(r[3]) || 0;
+      월별[m] = (월별[m] || 0) + amt;
+      줄.push({ ymd: Utilities.formatDate(d, TIMEZONE, 'MM-dd'), cat: cat,
+                amt: amt, 항목: String(r[2] || ''), 표식: String(r[5] || '') });
+    });
+
+    if (!줄.length) { Logger.log('  고기값 기록이 하나도 없습니다'); return; }
+
+    Logger.log('\n  ── 지금 들어 있는 줄 ' + 줄.length + '개 ──');
+    줄.sort(function (a, b) { return a.ymd < b.ymd ? -1 : 1; }).forEach(function (x) {
+      Logger.log('     ' + x.ymd + '  ' + (x.cat + '        ').slice(0, 8) +
+                 '  ' + (x.amt.toLocaleString() + '원          ').slice(0, 14) +
+                 '  ' + (x.항목 + '                ').slice(0, 18) + '  ' + x.표식.slice(0, 22));
+    });
+
+    if (branch !== '원당점') return;
+
+    Logger.log('\n  ── 사장님 자료와 대조 ──');
+    Logger.log('  월     시트           실제(그래프)      차이');
+    Logger.log('  ─────────────────────────────────────────────────────');
+    var 모자람 = 0;
+    for (var m = 1; m <= 8; m++) {
+      var s = 월별[m] || 0, p = 실제_원당_[m] || 0, diff = s - p;
+      모자람 += (p - s);
+      Logger.log('  ' + ('  ' + m + '월').slice(-4) + '   ' +
+                 (s.toLocaleString() + '            ').slice(0, 14) + ' ' +
+                 (p.toLocaleString() + '            ').slice(0, 14) + ' ' +
+                 (diff > 0 ? '+' : '') + diff.toLocaleString() +
+                 (s === 0 ? '   ← 통째로 빔' : (Math.abs(diff) > 100000 ? '   ⚠️' : '   ✅')));
+    }
+    Logger.log('  ─────────────────────────────────────────────────────');
+    Logger.log('  1~8월 모자란 금액   ' + 모자람.toLocaleString() + '원');
+  });
+
+  Logger.log('\n\n ※ 읽기만 했습니다.');
+  Logger.log(' ※ 시트에 이미 값이 있는 달은 그 값이 어디서 왔는지 위 목록으로 확인하세요.');
+  Logger.log('    [자동]고기값_ 표식이면 입고 기록에서 계산된 것입니다.');
+}
