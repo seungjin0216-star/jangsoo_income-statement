@@ -6761,3 +6761,109 @@ function 고기값진단() {
   Logger.log(' ※ 시트에 이미 값이 있는 달은 그 값이 어디서 왔는지 위 목록으로 확인하세요.');
   Logger.log('    [자동]고기값_ 표식이면 입고 기록에서 계산된 것입니다.');
 }
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  🥩 고기값복원 — 원당 1~8월 고기값을 사장님 자료로 갈아끼운다
+//
+//  2026-09-11 추가.
+//
+//  ── 왜 통째로 갈아끼우나 ──────────────────────────────────
+//    백석은 입고앱이 생긴 뒤로 「입고 수량 × 단가」로 자동 계상됩니다.
+//    ⚠️ 원당은 그 시스템이 없었습니다. 그날 결제한 것만 손으로 올렸습니다.
+//       올린 달도 있고 빠진 달도 있어서 지금 시트 값은 믿을 수 없습니다.
+//
+//    사장님이 따로 적어오신 수기 손익계산서가 100% 정확합니다 (사장님 확인).
+//    그래서 원인을 따지지 않고 기존 줄을 전부 걷어내고 그 값으로 넣습니다.
+//
+//  ── 근거 ────────────────────────────────────────────────
+//    2026-09-11 사장님이 보내주신 월별 고기값 그래프.
+//    8월 11,150,000원이 같은 날 보내주신 8월 수기 손익계산서의
+//    「정읍 고기값 11,150,000원」과 정확히 일치해 자료가 맞음을 확인했습니다.
+//
+//  ⚠️ 9월부터는 원당 입고앱이 자동으로 계상합니다. 이 도구는 1~8월 한 번만 씁니다.
+//  ⚠️ 되돌리려면 [고기값복원] 표식이 붙은 줄을 지우면 됩니다.
+//     (지운 옛 줄은 적용 로그에 전부 남깁니다)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+var 고기값_원당_ = {
+  1: 10500000,  2:  9580000,  3: 11170000,  4: 12570000,
+  5: 12630000,  6: 14240000,  7: 12740000,  8: 11150000,
+};
+var 고기표식_ = '[고기값복원]';
+
+function 고기값복원_미리보기() { 고기값복원_(true); }
+function 고기값복원_적용()     { 고기값복원_(false); }
+
+function 고기값복원_(dryRun) {
+  var branch = '원당점';
+  var sh = SpreadsheetApp.openById(BRANCH_CONFIG[branch].ssId).getSheetByName('지출및매출로그');
+  if (!sh) { Logger.log('❌ 시트 없음'); return; }
+
+  var v = sh.getRange(2, 1, sh.getLastRow() - 1, SHEET_HEADERS.length).getValues();
+
+  // ── ① 지울 것 : 2026년 1~8월 고기값 계열 ──
+  var 지울것 = [], 지운합 = 0;
+  for (var i = 0; i < v.length; i++) {
+    var cat = String(v[i][1]).trim();
+    if (cat.indexOf('고기') < 0 && cat.indexOf('육류') < 0) continue;
+    var d = toDate_(v[i][0]);
+    if (!d || d.getFullYear() !== 2026) continue;
+    var m = d.getMonth() + 1;
+    if (m > 8) continue;                       // 9월부터는 자동계상이라 안 건드린다
+    var amt = Number(v[i][3]) || 0;
+    지울것.push({ row: i + 2, ymd: Utilities.formatDate(d, TIMEZONE, 'yyyy-MM-dd'),
+                 cat: cat, amt: amt, 항목: String(v[i][2] || '') });
+    지운합 += amt;
+  }
+
+  // ── ② 넣을 것 : 월말 하루에 한 줄씩 ──
+  var 넣을줄 = [], 넣을합 = 0;
+  var now = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd HH:mm:ss');
+  Object.keys(고기값_원당_).sort(function (a, b) { return a - b; }).forEach(function (m) {
+    var 말일 = new Date(2026, Number(m), 0);
+    var ymd  = Utilities.formatDate(말일, TIMEZONE, 'yyyy-MM-dd');
+    var amt  = 고기값_원당_[m];
+    넣을줄.push([ymd, '고기값', 고기표식_ + ' ' + m + '월분', amt, branch, 고기표식_, now, '']);
+    넣을합 += amt;
+  });
+
+  // ── ③ 보여주기 ──
+  Logger.log('\n ════════ 원당 고기값 복원 ════════\n');
+  Logger.log('  지울 것   ' + 지울것.length + '줄 · ' + 지운합.toLocaleString() + '원');
+  지울것.forEach(function (x) {
+    Logger.log('     ' + x.ymd + '  ' + (x.amt.toLocaleString() + '원          ').slice(0, 14) +
+               '  ' + x.항목.slice(0, 28));
+  });
+
+  Logger.log('\n  넣을 것   ' + 넣을줄.length + '줄 · ' + 넣을합.toLocaleString() + '원');
+  넣을줄.forEach(function (r) {
+    Logger.log('     ' + r[0] + '  ' + (Number(r[3]).toLocaleString() + '원          ').slice(0, 14) + '  ' + r[2]);
+  });
+
+  Logger.log('\n  ──────────────────────────────');
+  Logger.log('  결과   ' + 지운합.toLocaleString() + '원  →  ' + 넣을합.toLocaleString() + '원');
+  Logger.log('  차이   +' + (넣을합 - 지운합).toLocaleString() + '원 만큼 원가가 늘어납니다');
+  Logger.log('         (그만큼 이익이 줄어듭니다. 지금까지 부풀려져 있던 것입니다)');
+
+  if (dryRun) {
+    Logger.log('\n  ※ 미리보기입니다. 실제로 하려면 고기값복원_적용() 을 실행하세요.');
+    return;
+  }
+
+  // ── ④ 실행 ──
+  if (지울것.length) {
+    Logger.log('\n  ── 지운 줄 기록 (되돌릴 때 쓰세요) ──');
+    지울것.forEach(function (x) {
+      Logger.log('     ' + x.ymd + '\t' + x.cat + '\t' + x.amt + '\t' + x.항목);
+    });
+    지울것.map(function (x) { return x.row; })
+          .sort(function (a, b) { return b - a; })
+          .forEach(function (row) { sh.deleteRow(row); });
+  }
+
+  sh.getRange(sh.getLastRow() + 1, 1, 넣을줄.length, SHEET_HEADERS.length).setValues(넣을줄);
+
+  Logger.log('\n  ✅ ' + 지울것.length + '줄을 지우고 ' + 넣을줄.length + '줄을 넣었습니다.');
+  Logger.log('  다음: 고기값진단() 으로 월별이 맞는지 확인하세요.');
+}
