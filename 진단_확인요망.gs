@@ -1819,3 +1819,169 @@ function 고기값복원_(dryRun) {
   Logger.log('\n  ✅ ' + 지울것.length + '줄을 지우고 ' + 넣을줄.length + '줄을 넣었습니다.');
   Logger.log('  다음: 고기값진단() 으로 월별이 맞는지 확인하세요.');
 }
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  📋 팔월대조() — 사장님 수기 손익계산서 vs 시트, 8월 원당
+//
+//  2026-09-11 추가.
+//
+//  사장님이 따로 적어오신 8월 수기 손익계산서가 기준입니다.
+//  그것과 시트를 한 줄씩 맞춰보면 뭐가 빠졌는지 바로 드러납니다.
+//  8월 하나를 맞추면 나머지 달도 같은 자리에서 빠졌을 확률이 높습니다.
+//
+//  ⚠️ 읽기만 합니다.
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+// 사장님 수기 손익계산서 (2026년 8월 · 원당)
+//   [수기항목, 금액, 시트에서 찾을 계정(여럿이면 배열), 메모]
+var 수기8월_원당_ = [
+  ['정읍 고기값',                  11150000, ['고기값'],              ''],
+  ['택배비',                        1305000, ['고기값'],              '사장님: 택배비도 고기값'],
+  ['사회보험(4대보험·산재·고용·건강)', 6176850, ['4대보험'],            ''],
+  ['양희민·정진우·사현민·재민·랑균',  5000000, ['직원급여'],            ''],
+  ['알바비(퇴직금 포함)',            1740020, ['인건비','알바급여'],   ''],
+  ['미광급여',                        30000, ['인건비','직원급여'],   ''],
+  ['주류',                          2906900, ['주류원가'],            ''],
+  ['음료',                           180000, ['음료원가'],            ''],
+  ['미락',                          1250410, ['미락'],                ''],
+  ['특양',                           303644, ['특양','가게외부카드'], ''],
+  ['진성마트 국민카드',              1503560, ['가게내부카드'],        ''],
+  ['자유마트·내고양마트',             223000, ['가게내부카드'],        ''],
+  ['떡·식빵·소고기·다시다 외 네이버',1071720, ['가게내부카드','가게외부카드'], ''],
+  ['식비',                           196020, ['식비'],                '시트에선 고정비 수기칸'],
+  ['임대료',                        1650000, ['임대료'],              '시트 수기칸'],
+  ['카드수수료',                    1486360, ['카드수수료'],          '시트는 매출×수수료율 수식'],
+  ['가스요금',                      1117740, ['가스사용료','가스요금'],''],
+  ['전기요금',                      1007980, ['매장관리비'],          ''],
+  ['수도요금',                       301420, ['매장관리비'],          '전기+수도가 한 칸'],
+  ['경선세무사',                     110000, ['세무사비용'],          '시트 수기칸'],
+  ['통신비(경기케이블)',              80190, ['통신요금'],            '시트 수기칸'],
+  ['경기케이블',                      14157, ['통신요금'],            ''],
+  ['돌핀',                            40000, ['기타잡비용'],          ''],
+  ['매쉬부룽',                       300000, ['기타잡비용'],          ''],
+  ['공동카메라·화장실수리·하수도청소',340000, ['기타잡비용'],          ''],
+  ['설·추석·휴가비',                 300000, ['기타잡비용'],          ''],
+  ['테이블링',                        40700, ['테이블링','기타잡비용'],'시트 수기칸'],
+];
+
+function 팔월대조() {
+  var branch = '원당점';
+  var ss = SpreadsheetApp.openById(BRANCH_CONFIG[branch].ssId);
+
+  // ── ① 로그에서 8월 계정별 합계 ──
+  var sh = ss.getSheetByName('지출및매출로그');
+  var 로그 = {};
+  if (sh && sh.getLastRow() > 1) {
+    var v = sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues();
+    v.forEach(function (r) {
+      var d = toDate_(r[0]);
+      if (!d || d.getFullYear() !== 2026 || d.getMonth() !== 7) return;   // 8월
+      var cat = String(r[1]).trim();
+      if (!cat) return;
+      로그[cat] = (로그[cat] || 0) + (Number(r[3]) || 0);
+    });
+  }
+
+  // ── ② 8월 시트의 B열·C열 (수기로 적은 칸까지 본다) ──
+  var msh = ss.getSheetByName('26년 8월 손익계산서');
+  var 시트 = {};
+  if (msh) {
+    var last = Math.min(msh.getLastRow(), 60);
+    var b = msh.getRange(1, 2, last, 1).getValues();
+    var c = msh.getRange(1, 3, last, 1).getDisplayValues();
+    for (var i = 0; i < last; i++) {
+      var name = String(b[i][0] || '').trim();
+      if (!name) continue;
+      var val = Number(String(c[i][0]).replace(/[^0-9.-]/g, '')) || 0;
+      시트[name.replace(/\s+/g, '')] = val;
+    }
+  }
+
+  // 이름이 조금 달라도 찾아준다
+  function 찾기(names) {
+    for (var i = 0; i < names.length; i++) {
+      var n = names[i];
+      if (로그[n] !== undefined) return { 값: 로그[n], 곳: '로그' };
+    }
+    for (var i = 0; i < names.length; i++) {
+      var key = names[i].replace(/\s+/g, '');
+      for (var k in 시트) {
+        if (k === key || k.indexOf(key) >= 0 || key.indexOf(k) >= 0) {
+          if (시트[k] > 0) return { 값: 시트[k], 곳: '시트' };
+        }
+      }
+    }
+    return null;
+  }
+
+  Logger.log('\n ════════ 8월 원당 — 수기 vs 시트 ════════\n');
+  Logger.log('  수기 항목                        수기 금액       시트 금액       차이');
+  Logger.log('  ─────────────────────────────────────────────────────────────────────');
+
+  var 수기합 = 0, 시트합 = 0, 빠진것 = [], 어긋난것 = [];
+
+  수기8월_원당_.forEach(function (row) {
+    var 이름 = row[0], 금액 = row[1], 후보 = row[2], 메모 = row[3];
+    수기합 += 금액;
+    var hit = 찾기(후보);
+    var s = hit ? hit.값 : 0;
+    if (hit) 시트합 += s;
+
+    var 표시 = hit ? (s.toLocaleString() + '원') : '❌ 없음';
+    var diff = s - 금액;
+    var 판정 = !hit ? '🔴 통째로 빔'
+             : (Math.abs(diff) < 1000 ? '✅'
+             : (diff > 0 ? '⚠️ +' + diff.toLocaleString() : '⚠️ ' + diff.toLocaleString()));
+
+    Logger.log('  ' + (이름 + '                                  ').slice(0, 32) +
+               (금액.toLocaleString() + '원            ').slice(0, 14) +
+               (표시 + '              ').slice(0, 15) + 판정);
+
+    if (!hit) 빠진것.push({ 이름: 이름, 금액: 금액, 후보: 후보 });
+    else if (Math.abs(diff) >= 1000) 어긋난것.push({ 이름: 이름, 수기: 금액, 시트: s });
+    if (메모) Logger.log('        ↳ ' + 메모);
+  });
+
+  Logger.log('  ─────────────────────────────────────────────────────────────────────');
+  Logger.log('  합계                            ' + (수기합.toLocaleString() + '원            ').slice(0, 14) +
+             (시트합.toLocaleString() + '원').slice(0, 15));
+  Logger.log('  차이                            ' + (시트합 - 수기합).toLocaleString() + '원');
+
+  // ── ③ 요약 ──
+  if (빠진것.length) {
+    var 빠진합 = 0;
+    빠진것.forEach(function (x) { 빠진합 += x.금액; });
+    Logger.log('\n  🔴 시트에 아예 없는 것 ' + 빠진것.length + '개 · ' + 빠진합.toLocaleString() + '원');
+    빠진것.forEach(function (x) {
+      Logger.log('     ' + (x.금액.toLocaleString() + '원          ').slice(0, 14) + x.이름 +
+                 '   (찾아본 계정: ' + x.후보.join(' / ') + ')');
+    });
+  }
+
+  if (어긋난것.length) {
+    Logger.log('\n  ⚠️ 있지만 금액이 다른 것 ' + 어긋난것.length + '개');
+    어긋난것.forEach(function (x) {
+      Logger.log('     ' + (x.이름 + '                    ').slice(0, 22) +
+                 '수기 ' + (x.수기.toLocaleString() + '원        ').slice(0, 13) +
+                 '시트 ' + x.시트.toLocaleString() + '원');
+    });
+  }
+
+  // ── ④ 반대로, 시트에만 있는 8월 계정 ──
+  var 쓴것 = {};
+  수기8월_원당_.forEach(function (r) { r[2].forEach(function (n) { 쓴것[n] = true; }); });
+  var 시트만 = Object.keys(로그).filter(function (c) {
+    return !쓴것[c] && 매출분류_.indexOf(c) < 0 && 로그[c] > 0;
+  });
+  if (시트만.length) {
+    Logger.log('\n  ── 시트(로그)에만 있는 8월 계정 ──');
+    Logger.log('     수기에 없는 것들입니다. 계정 이름이 다르거나 사장님이 안 적으신 것입니다.');
+    시트만.sort(function (a, b) { return 로그[b] - 로그[a]; }).forEach(function (c) {
+      Logger.log('     ' + (로그[c].toLocaleString() + '원          ').slice(0, 14) + c);
+    });
+  }
+
+  Logger.log('\n\n ※ 읽기만 했습니다.');
+  Logger.log(' ※ 「시트 금액」은 지출및매출로그를 먼저 보고, 없으면 8월 시트의 수기 칸을 봅니다.');
+}
