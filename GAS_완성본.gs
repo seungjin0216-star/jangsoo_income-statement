@@ -7569,3 +7569,90 @@ function 계정내역() {
   Logger.log('\n ※ 읽기만 했습니다.');
   Logger.log(' ※ 다른 계정을 보려면 코드의 볼계정_ 을 바꾸고 다시 실행하세요.');
 }
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  🗑️ 가짜비용정리 — 비용 자리에 앉은 매출·퇴직금을 지운다  (원당점)
+//
+//  2026-09-13 추가.
+//
+//  ── 왜 생겼나 ───────────────────────────────────────────
+//    옛 영수증분석기는 AI 가 스스로 계정을 골랐습니다.
+//    마감정산서를 읽다가 「매출합계」·「총 매출」·「실매출액」 같은 줄을
+//    비용으로 잡아 「기타잡비용」에 넣었습니다.
+//    매출이 비용 자리에 앉으니 손익이 두 방향으로 동시에 틀어집니다.
+//
+//    ⚠️ 지금은 계정을 눌러 고르는 방식이라 이 문제가 안 생깁니다.
+//       그래서 옛 데이터만 치우면 끝입니다 (사장님 방침 — 추적 불필요).
+//
+//  ── 함께 지우는 것 ──────────────────────────────────────
+//    사현민 퇴직금 750만원. 퇴직금은 손익에 안 넣기로 했습니다.
+//
+//  ⚠️ 날짜·계정·금액이 셋 다 맞아야 지웁니다. 하나라도 다르면 그냥 알리고 넘어갑니다.
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+var 가짜비용_원당_ = [
+  { ymd:'2026-04-30', cat:'기타잡비용', amt: 7507367, 사유:'사현민 퇴직금 — 퇴직금은 손익에 안 넣음' },
+  { ymd:'2026-05-31', cat:'기타잡비용', amt: 4072000, 사유:'마감정산서의 「매출합계」가 비용으로' },
+  { ymd:'2026-05-31', cat:'기타잡비용', amt: 2816000, 사유:'마감정산서의 「총 매출」이 비용으로' },
+  { ymd:'2026-05-29', cat:'기타잡비용', amt: 2655000, 사유:'마감정산서의 「마감정산」이 비용으로' },
+  { ymd:'2026-05-28', cat:'기타잡비용', amt: 1237000, 사유:'마감정산서의 「실매출액」이 비용으로' },
+  { ymd:'2026-05-28', cat:'기타잡비용', amt:  124000, 사유:'마감정산서의 「계좌이체」가 비용으로' },
+  { ymd:'2026-07-22', cat:'기타잡비용', amt: 1377000, 사유:'마감정산서의 「매출 합계」가 비용으로' },
+];
+
+function 가짜비용정리_미리보기() { 가짜비용정리_(true); }
+function 가짜비용정리_적용()     { 가짜비용정리_(false); }
+
+function 가짜비용정리_(dryRun) {
+  var branch = '원당점';
+  var sh = SpreadsheetApp.openById(BRANCH_CONFIG[branch].ssId).getSheetByName('지출및매출로그');
+  if (!sh || sh.getLastRow() < 2) { Logger.log('❌ 기록 없음'); return; }
+
+  var v = sh.getRange(2, 1, sh.getLastRow() - 1, 6).getValues();
+  var 찾음 = [], 못찾음 = [], 합계 = 0;
+
+  가짜비용_원당_.forEach(function (t) {
+    var hit = null;
+    for (var i = 0; i < v.length; i++) {
+      var d = toDate_(v[i][0]);
+      if (!d) continue;
+      if (Utilities.formatDate(d, TIMEZONE, 'yyyy-MM-dd') !== t.ymd) continue;
+      if (String(v[i][1]).trim() !== t.cat) continue;
+      if ((Number(v[i][3]) || 0) !== t.amt) continue;
+      hit = { row: i + 2, 항목: String(v[i][2] || '') };
+      break;
+    }
+    if (hit) { 찾음.push({ t: t, hit: hit }); 합계 += t.amt; }
+    else 못찾음.push(t);
+  });
+
+  Logger.log('\n ════════ 가짜비용 정리 [' + branch + '] ════════\n');
+
+  찾음.forEach(function (x) {
+    Logger.log('  ✅ ' + x.t.ymd + '  ' + (x.t.amt.toLocaleString() + '원          ').slice(0, 14) +
+               '  ' + (x.hit.항목 + '                ').slice(0, 18));
+    Logger.log('        ' + x.t.사유);
+  });
+
+  못찾음.forEach(function (t) {
+    Logger.log('  ⏭ 못 찾음: ' + t.ymd + '  ' + t.amt.toLocaleString() + '원 — 이미 지워졌거나 금액이 다릅니다');
+  });
+
+  Logger.log('\n  ──────────────────────────────');
+  Logger.log('  지울 것 ' + 찾음.length + '줄 · ' + 합계.toLocaleString() + '원');
+  Logger.log('  ⚠️ 전부 「가짜 비용」입니다. 지우면 그만큼 이익이 늘어납니다.');
+
+  if (dryRun) {
+    Logger.log('\n  ※ 미리보기입니다. 실제로 하려면 가짜비용정리_적용() 을 실행하세요.');
+    return;
+  }
+  if (!찾음.length) { Logger.log('\n  지울 것이 없습니다.'); return; }
+
+  찾음.map(function (x) { return x.hit.row; })
+      .sort(function (a, b) { return b - a; })
+      .forEach(function (row) { sh.deleteRow(row); });
+
+  Logger.log('\n  ✅ ' + 찾음.length + '줄 · ' + 합계.toLocaleString() + '원을 지웠습니다.');
+  Logger.log('  다음: 계정내역() 으로 기타잡비용이 깨끗해졌는지 보세요.');
+}
