@@ -2449,10 +2449,18 @@ function 수기2단계_(dryRun) {
 //  쓰는 법 — 아래 볼계정_ 을 바꾸고 실행하세요.
 //  ⚠️ 읽기만 합니다.
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-var 볼계정_ = '기타잡비용';
+// ⚠️ 2026-09-13 — 여러 계정을 한 번에 볼 수 있게 바꿨습니다.
+//    하나씩 바꿔가며 돌리기 번거로워서입니다.
+var 볼계정_ = ['거래명세표', '이체', '결제', '영수증', '마트', '주류대금결제'];
 var 볼지점_ = '원당점';
+var 줄제한_ = 8;        // 계정·월마다 큰 것부터 몇 줄까지 볼지
 
 function 계정내역() {
+  var 목록 = (typeof 볼계정_ === 'string') ? [볼계정_] : 볼계정_;
+  목록.forEach(function (cat) { 계정하나_(cat); });
+}
+
+function 계정하나_(볼계정_) {
   var sh = SpreadsheetApp.openById(BRANCH_CONFIG[볼지점_].ssId).getSheetByName('지출및매출로그');
   if (!sh || sh.getLastRow() < 2) { Logger.log('기록 없음'); return; }
 
@@ -2485,15 +2493,15 @@ function 계정내역() {
     Logger.log('  ── ' + m + '월  ' + 월합.toLocaleString() + '원  (' + 줄.length + '줄) ──');
 
     // 큰 것부터 — 이상한 게 위로 올라온다
-    줄.sort(function (a, b) { return b.금액 - a.금액; }).forEach(function (x) {
+    줄.sort(function (a, b) { return b.금액 - a.금액; }).slice(0, 줄제한_).forEach(function (x) {
       var 경고 = x.금액 >= 1000000 ? '   🔴 큽니다' : '';
       Logger.log('     ' + x.ymd + '  ' + (x.금액.toLocaleString() + '원          ').slice(0, 14) +
                  (x.항목 + '                    ').slice(0, 22) + '  ' + x.표식.slice(0, 24) + 경고);
     });
+    if (줄.length > 줄제한_) Logger.log('     … 그 외 ' + (줄.length - 줄제한_) + '줄');
   });
 
   Logger.log('\n ※ 읽기만 했습니다.');
-  Logger.log(' ※ 다른 계정을 보려면 코드의 볼계정_ 을 바꾸고 다시 실행하세요.');
 }
 
 
