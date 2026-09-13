@@ -114,6 +114,14 @@ body{font-family:-apple-system,"Helvetica Neue",sans-serif;background:var(--bg);
   <button class="doc-btn" onclick="dirSel(this,'콩나물','')"><span class="btn-emoji">🌾</span><span class="btn-lbl">콩나물</span></button>
   <button class="doc-btn" onclick="dirSel(this,'키위','보성')"><span class="btn-emoji">🥝</span><span class="btn-lbl">키위<br><small style="font-weight:400;opacity:.6">보성</small></span></button>
   <button class="doc-btn" onclick="dirSel(this,'매장관리비','수도요금')"><span class="btn-emoji">💧</span><span class="btn-lbl">매장관리비 — 수도<br><small style="font-weight:400;opacity:.6">숫자 입력</small></span></button>
+  <!-- ⚠️ 2026-09-13 추가 — 세금·잡비용을 넣을 자리가 없어서 매달 손으로 채우고 있었습니다.
+       이제 고지서를 받으면 바로 금액만 넣으시면 됩니다.
+       ⚠️ 기타세금에 넣을 것: 지방세·등록세·면허세·재산세처럼 가게에 부과되는 세금.
+          근로소득세·사업소득세는 넣지 마세요 — 급여가 「세전」이라 이미 인건비에 들어 있습니다.
+          부가세·종합소득세도 넣지 마세요 — 손익계산서가 매출 비례로 따로 계산합니다. -->
+  <button class="doc-btn" onclick="dirSel(this,'기타세금','')"><span class="btn-emoji">🧾</span><span class="btn-lbl">기타세금<br><small style="font-weight:400;opacity:.6">지방세·등록세</small></span></button>
+  <button class="doc-btn" onclick="dirSel(this,'기타잡비용','')"><span class="btn-emoji">🧰</span><span class="btn-lbl">기타잡비용<br><small style="font-weight:400;opacity:.6">수리·소모품</small></span></button>
+
 </div>
 <div style="display:flex;gap:8px;margin-top:12px">
   <input id="dirAmt" type="number" inputmode="numeric" placeholder="금액 (원)"
