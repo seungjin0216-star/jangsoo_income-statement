@@ -7059,3 +7059,74 @@ function 팔월대조() {
   Logger.log('\n\n ※ 읽기만 했습니다.');
   Logger.log(' ※ 「시트 금액」은 지출및매출로그를 먼저 보고, 없으면 8월 시트의 수기 칸을 봅니다.');
 }
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  🗓️ 최근기록() — 요즘 올린 영수증이 시트에 들어갔나
+//
+//  2026-09-13 추가.
+//  드라이브에 [완료] 딱지가 붙어도 시트에 없을 수 있습니다 (지난번 유실 사고).
+//  최근 며칠치를 날짜별로 펼쳐 보고 눈으로 확인하는 도구입니다.
+//
+//  ⚠️ 읽기만 합니다.
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function 최근기록() {
+  var 며칠 = 14;                                   // 최근 2주
+  var 기준 = new Date();
+  기준.setDate(기준.getDate() - 며칠);
+
+  Object.keys(BRANCH_CONFIG).forEach(function (branch) {
+    Logger.log('\n\n ════════════ [' + branch + '] 최근 ' + 며칠 + '일 ════════════');
+
+    var sh = SpreadsheetApp.openById(BRANCH_CONFIG[branch].ssId).getSheetByName('지출및매출로그');
+    if (!sh || sh.getLastRow() < 2) { Logger.log('  기록 없음'); return; }
+
+    var v = sh.getRange(2, 1, sh.getLastRow() - 1, 6).getValues();
+    var 날짜별 = {};
+
+    v.forEach(function (r) {
+      var d = toDate_(r[0]);
+      if (!d || d < 기준) return;
+      var ymd = Utilities.formatDate(d, TIMEZONE, 'MM-dd');
+      if (!날짜별[ymd]) 날짜별[ymd] = [];
+      날짜별[ymd].push({
+        분류: String(r[1]).trim(),
+        금액: Number(r[3]) || 0,
+        항목: String(r[2] || '').trim(),
+        표식: String(r[5] || '').trim(),
+      });
+    });
+
+    var 날들 = Object.keys(날짜별).sort();
+    if (!날들.length) { Logger.log('  ⚠️ 최근 ' + 며칠 + '일 기록이 하나도 없습니다'); return; }
+
+    날들.forEach(function (ymd) {
+      var 줄 = 날짜별[ymd];
+      var 매출 = 0, 지출 = 0;
+      줄.forEach(function (x) {
+        if (매출분류_.indexOf(x.분류) >= 0) 매출 += x.금액; else 지출 += x.금액;
+      });
+      Logger.log('\n  ── ' + ymd + '  (매출 ' + 매출.toLocaleString() + '원 · 지출 ' + 지출.toLocaleString() + '원) ──');
+      줄.forEach(function (x) {
+        Logger.log('     ' + (x.분류 + '            ').slice(0, 12) +
+                   (x.금액.toLocaleString() + '원          ').slice(0, 13) +
+                   '  ' + (x.항목 + '                ').slice(0, 18) + '  ' + x.표식.slice(0, 26));
+      });
+    });
+
+    // 빠진 날 짚기
+    Logger.log('\n  ── 최근 ' + 며칠 + '일 중 매출이 없는 날 ──');
+    var 오늘 = new Date(), 빈날 = [];
+    for (var i = 며칠; i >= 1; i--) {
+      var d = new Date(); d.setDate(d.getDate() - i);
+      if (쉬는날_(branch, d)) continue;
+      var key = Utilities.formatDate(d, TIMEZONE, 'MM-dd');
+      var 있나 = (날짜별[key] || []).some(function (x) { return 매출분류_.indexOf(x.분류) >= 0; });
+      if (!있나) 빈날.push(key);
+    }
+    Logger.log('     ' + (빈날.length ? '⚠️ ' + 빈날.join(' · ') : '✅ 없음'));
+  });
+
+  Logger.log('\n\n ※ 읽기만 했습니다.');
+  Logger.log(' ※ 어제·오늘이 비어 있는 건 정상입니다. 새벽 2시에 처리됩니다.');
+}
