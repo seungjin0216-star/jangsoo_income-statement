@@ -2582,3 +2582,90 @@ function 가짜비용정리_(dryRun) {
   Logger.log('\n  ✅ ' + 찾음.length + '줄 · ' + 합계.toLocaleString() + '원을 지웠습니다.');
   Logger.log('  다음: 계정내역() 으로 기타잡비용이 깨끗해졌는지 보세요.');
 }
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  🗑️ 매출계정정리 — 비용 자리에 앉은 「매출」 계정을 통째로 지운다  (원당점)
+//
+//  2026-09-13 추가.
+//
+//  ── 무엇을 지우나 ───────────────────────────────────────
+//    계정 이름 자체가 매출인 것들입니다.
+//        매출 · 마감정산서 · 마감정산 · 정산 · 신용매출
+//    옛 영수증분석기가 마감정산서를 읽다가 만든 가짜 비용입니다.
+//
+//  ── 왜 지워도 되나 ──────────────────────────────────────
+//    ⚠️ 진짜 매출은 이미 「카드매출·현금매출」로 제대로 들어가 있습니다.
+//       2026-09-07 에 포스 달력과 맞춰 여덟 달 전부 오차 22만원 이내로 확인했습니다.
+//       그러니 이것들은 지워도 매출이 줄지 않습니다. 가짜 비용만 사라집니다.
+//
+//    ⚠️ 지금 영수증분석기는 계정을 눌러 고르는 방식이라 다시 안 생깁니다.
+//
+//  ⚠️ 계정 이름으로 지웁니다. 아래 목록에 없는 계정은 손도 안 댑니다.
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+var 지울매출계정_ = ['매출', '마감정산서', '마감정산', '정산', '신용매출'];
+
+function 매출계정정리_미리보기() { 매출계정정리_(true); }
+function 매출계정정리_적용()     { 매출계정정리_(false); }
+
+function 매출계정정리_(dryRun) {
+  var branch = '원당점';
+  var sh = SpreadsheetApp.openById(BRANCH_CONFIG[branch].ssId).getSheetByName('지출및매출로그');
+  if (!sh || sh.getLastRow() < 2) { Logger.log('❌ 기록 없음'); return; }
+
+  var v = sh.getRange(2, 1, sh.getLastRow() - 1, 6).getValues();
+  var 지울것 = [], 합계 = 0, 계정별 = {}, 월별 = {};
+
+  for (var i = 0; i < v.length; i++) {
+    var cat = String(v[i][1]).trim();
+    if (지울매출계정_.indexOf(cat) < 0) continue;
+    var d = toDate_(v[i][0]);
+    if (!d) continue;
+    var amt = Number(v[i][3]) || 0;
+    var m = d.getMonth() + 1;
+    지울것.push({ row: i + 2, ymd: Utilities.formatDate(d, TIMEZONE, 'MM-dd'),
+                 cat: cat, amt: amt, 항목: String(v[i][2] || '') });
+    합계 += amt;
+    계정별[cat] = (계정별[cat] || 0) + amt;
+    월별[m] = (월별[m] || 0) + amt;
+  }
+
+  Logger.log('\n ════════ 비용 자리의 매출 계정 정리 [' + branch + '] ════════\n');
+
+  if (!지울것.length) { Logger.log('  ✅ 지울 것이 없습니다. 이미 깨끗합니다.'); return; }
+
+  Logger.log('  ── 계정별 ──');
+  Object.keys(계정별).sort(function (a, b) { return 계정별[b] - 계정별[a]; }).forEach(function (c) {
+    Logger.log('     ' + (계정별[c].toLocaleString() + '원          ').slice(0, 15) + c);
+  });
+
+  Logger.log('\n  ── 월별 ──');
+  Object.keys(월별).sort(function (a, b) { return a - b; }).forEach(function (m) {
+    Logger.log('     ' + m + '월   -' + 월별[m].toLocaleString() + '원');
+  });
+
+  Logger.log('\n  ── 지울 줄 (큰 것부터 20개) ──');
+  지울것.slice().sort(function (a, b) { return b.amt - a.amt; }).slice(0, 20).forEach(function (x) {
+    Logger.log('     ' + x.ymd + '  ' + (x.cat + '          ').slice(0, 11) +
+               (x.amt.toLocaleString() + '원          ').slice(0, 14) + x.항목.slice(0, 22));
+  });
+  if (지울것.length > 20) Logger.log('     … 그 외 ' + (지울것.length - 20) + '줄');
+
+  Logger.log('\n  ──────────────────────────────');
+  Logger.log('  지울 것 ' + 지울것.length + '줄 · ' + 합계.toLocaleString() + '원');
+  Logger.log('  ⚠️ 전부 가짜 비용입니다. 지우면 그만큼 이익이 늘어납니다.');
+  Logger.log('  ⚠️ 진짜 매출은 카드매출·현금매출에 그대로 있습니다. 매출은 안 줄어듭니다.');
+
+  if (dryRun) {
+    Logger.log('\n  ※ 미리보기입니다. 실제로 하려면 매출계정정리_적용() 을 실행하세요.');
+    return;
+  }
+
+  지울것.map(function (x) { return x.row; })
+        .sort(function (a, b) { return b - a; })
+        .forEach(function (row) { sh.deleteRow(row); });
+
+  Logger.log('\n  ✅ ' + 지울것.length + '줄 · ' + 합계.toLocaleString() + '원을 지웠습니다.');
+  Logger.log('  다음: 날짜진단() 으로 매출이 그대로인지 꼭 확인하세요.');
+}
