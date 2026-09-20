@@ -115,8 +115,12 @@ body{font-family:-apple-system,"Helvetica Neue",sans-serif;background:var(--bg);
 
 </div>
 <div style="display:flex;gap:8px;margin-top:12px">
-  <input id="dirAmt" type="number" inputmode="numeric" placeholder="금액 (원)"
-         oninput="dirChk()"
+  <!-- ⚠️ 2026-09-20 — type="number" 에서 type="text" 로 바꿨습니다.
+       number 는 쉼표를 못 넣습니다. 100000 이 10만인지 1만인지 눈에 안 들어와서
+       실수하기 쉬웠습니다. 이제 치는 대로 1,000 · 10,000 으로 쉼표가 붙습니다.
+       ⚠️ 보낼 때는 쉼표를 떼고 숫자만 보냅니다 (금액숫자_ 함수). -->
+  <input id="dirAmt" type="text" inputmode="numeric" placeholder="금액 (원)"
+         oninput="금액포맷_(this); dirChk()"
          style="flex:2;padding:14px;border-radius:12px;border:1px solid #2b3245;background:#161b28;color:#e8ecf4;font-size:17px">
   <input id="dirDate" type="date" onchange="dirChk()"
          style="flex:1.2;padding:14px;border-radius:12px;border:1px solid #2b3245;background:#161b28;color:#e8ecf4;font-size:15px">
@@ -167,13 +171,33 @@ function dirSel(btn,cat,memo){
   if(m && typeof memo==="string") m.value=memo;
   dirChk();
 }
+
+/* ── 금액란 쉼표 (2026-09-20) ────────────────────────────────
+   왜 넣었나
+     100000 이라고 쳐놓으면 10만원인지 1만원인지 한눈에 안 들어옵니다.
+     자릿수를 잘못 보고 넣으면 손익이 통째로 틀어집니다.
+   어떻게
+     숫자만 남기고 세 자리마다 쉼표를 다시 붙입니다.
+     ⚠️ 커서 위치를 지켜줍니다. 안 그러면 중간을 고칠 때 커서가 끝으로 튑니다. */
+function 금액포맷_(el){
+  var 뒤쪽 = el.value.length - el.selectionStart;        // 커서 뒤에 남은 글자 수
+  var 숫자 = (el.value || "").replace(/[^0-9]/g, "");
+  el.value = 숫자 ? Number(숫자).toLocaleString("ko-KR") : "";
+  var 새위치 = Math.max(0, el.value.length - 뒤쪽);
+  try { el.setSelectionRange(새위치, 새위치); } catch(e){}
+}
+function 금액숫자_(){
+  var v = (document.getElementById("dirAmt").value || "").replace(/[^0-9]/g, "");
+  return parseInt(v || "0", 10);
+}
+
 function dirChk(){
-  var amt=parseInt(document.getElementById("dirAmt").value||"0",10);
+  var amt=금액숫자_();
   var dt=document.getElementById("dirDate").value;
   document.getElementById("dirBtn").disabled=!(_dirCat&&amt>0&&dt);
 }
 function dirSend(){
-  var amt=parseInt(document.getElementById("dirAmt").value||"0",10);
+  var amt=금액숫자_();
   var dt=document.getElementById("dirDate").value;
   var memo=document.getElementById("dirMemo").value;
   if(!_dirCat||!(amt>0)||!dt)return;

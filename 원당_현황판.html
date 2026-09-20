@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>원당 손익 현황판 · 2026-09-15</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+     background:#f5f6f8;color:#1a1d21;padding:28px 20px 60px;line-height:1.6}
+.wrap{max-width:980px;margin:0 auto}
+h1{font-size:26px;font-weight:800;letter-spacing:-.5px}
+.sub{color:#6b7280;font-size:14px;margin-top:4px;margin-bottom:26px}
+.card{background:#fff;border-radius:14px;padding:22px 24px;margin-bottom:18px;
+      box-shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04)}
+h2{font-size:18px;font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+.h2sub{color:#6b7280;font-size:13px;margin-bottom:16px}
+.tag{font-size:11px;font-weight:700;padding:3px 9px;border-radius:99px;letter-spacing:.3px}
+.t-red{background:#fee2e2;color:#b91c1c}
+.t-amb{background:#fef3c7;color:#92400e}
+.t-grn{background:#dcfce7;color:#166534}
+.t-blu{background:#dbeafe;color:#1e40af}
+.t-gry{background:#e5e7eb;color:#4b5563}
+
+.big{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px}
+.big div{background:#fff;border-radius:14px;padding:18px 20px;
+         box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.big .n{font-size:24px;font-weight:800;letter-spacing:-.5px;margin:6px 0 2px}
+.big .l{font-size:12px;color:#6b7280;font-weight:600}
+.big .d{font-size:12px;color:#9ca3af}
+.red{color:#dc2626}.amb{color:#d97706}.grn{color:#16a34a}.blu{color:#2563eb}
+
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-weight:600;color:#6b7280;padding:7px 8px;border-bottom:2px solid #e5e7eb;font-size:12px}
+td{padding:7px 8px;border-bottom:1px solid #f1f3f5}
+td.n{text-align:right;font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:none}
+.tot td{font-weight:700;border-top:2px solid #e5e7eb;background:#fafbfc}
+
+.bar{display:flex;align-items:center;gap:10px;margin:7px 0}
+.bar .m{width:36px;font-size:12px;color:#6b7280;font-weight:600}
+.bar .track{flex:1;height:22px;background:#f1f3f5;border-radius:5px;overflow:hidden;display:flex}
+.bar .fill{height:100%;border-radius:5px 0 0 5px}
+.bar .v{width:104px;text-align:right;font-size:12px;font-variant-numeric:tabular-nums;font-weight:600}
+
+.note{background:#fffbeb;border-left:3px solid #f59e0b;padding:11px 14px;border-radius:0 7px 7px 0;
+      font-size:13px;margin:14px 0}
+.note.r{background:#fef2f2;border-color:#ef4444}
+.note.g{background:#f0fdf4;border-color:#22c55e}
+.note b{font-weight:700}
+
+.flow{display:flex;gap:10px;align-items:stretch;margin:16px 0;flex-wrap:wrap}
+.step{flex:1;min-width:150px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:13px 15px}
+.step .no{font-size:11px;font-weight:800;color:#94a3b8;letter-spacing:.5px}
+.step .ti{font-size:14px;font-weight:700;margin:3px 0 5px}
+.step .de{font-size:12px;color:#64748b;line-height:1.5}
+.step.hot{background:#fef2f2;border-color:#fecaca}
+.step.ok{background:#f0fdf4;border-color:#bbf7d0}
+
+code{background:#f1f3f5;padding:1px 5px;border-radius:4px;font-size:12px;
+     font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.mini{font-size:12px;color:#6b7280}
+ul{margin:8px 0 0 18px;font-size:13px}
+li{margin:4px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>원당 손익 현황판</h1>
+<div class="sub">2026-09-15 · <code>전체대조()</code> 결과 · 수기 손익계산서 1~8월 기준</div>
+
+<div class="big">
+  <div>
+    <div class="l">로그가 모자란 돈</div>
+    <div class="n red">11,135,086원</div>
+    <div class="d">넣으면 바로 해결</div>
+  </div>
+  <div>
+    <div class="l">시트가 안 읽는 돈</div>
+    <div class="n amb">27,276,497원</div>
+    <div class="d">넣어도 안 나타남 · 시트를 고쳐야 함</div>
+  </div>
+  <div>
+    <div class="l">넣으면 안 되는 돈</div>
+    <div class="n blu">10,804,200원</div>
+    <div class="d">시트 고정비 칸에 이미 있음</div>
+  </div>
+</div>
+
+<div class="note r">
+  <b>⚠️ 「부족 49,215,783원」은 실제보다 부풀려진 숫자입니다.</b><br>
+  그중 <b>2,768만원</b>은 시트가 안 읽어서 못 나타나는 것이고,
+  <b>1,080만원</b>은 시트 고정비 칸에 이미 들어 있어 로그에 넣으면 안 되는 것입니다.
+  <b>진짜 채워야 할 돈은 1,113만원</b>입니다.
+</div>
+
+
+<!-- ══════════ 1 ══════════ -->
+<div class="card">
+  <h2><span class="tag t-red">문제 1</span> 시트가 고장 나 있습니다</h2>
+  <div class="h2sub">로그를 아무리 정확히 채워도 이 세 칸은 안 고쳐집니다</div>
+
+  <table>
+    <tr><th>행</th><th>계정</th><th>지금 상태</th><th class="n">8월 시트</th><th class="n">8월 수기</th><th class="n">차이</th></tr>
+    <tr>
+      <td>30</td><td><b>직원 급여</b></td>
+      <td><span class="tag t-red">하루치만</span> <code>SUMIFS(…G$11…)</code></td>
+      <td class="n">3,400,000</td><td class="n">5,000,000</td><td class="n red">−1,600,000</td>
+    </tr>
+    <tr>
+      <td>31</td><td><b>알바 급여</b></td>
+      <td><span class="tag t-red">하루치만</span> <code>SUMIFS(…G$11…)</code></td>
+      <td class="n">1,799,400</td><td class="n">1,770,020</td><td class="n mini">그 달 1일치만 우연히 맞음</td>
+    </tr>
+    <tr>
+      <td>43</td><td><b>매장관리비</b></td>
+      <td><span class="tag t-red">숫자가 굳음</span> <code>=530670+234220</code></td>
+      <td class="n">764,890</td><td class="n">1,309,400</td><td class="n red">−544,510</td>
+    </tr>
+  </table>
+
+  <div class="note">
+    <b>43행은 아홉 달 전부 764,890원</b>입니다. 1월 전기(530,670)+수도(234,220)가 그대로 굳었습니다.<br>
+    <b>30·31행은 날짜 조건이 하나뿐</b>이라 그 달 <b>1일 하루</b>만 더합니다.
+    G열에 있어야 할 수식이 C열에 들어가 있습니다.
+  </div>
+  <div class="note g">
+    <b>✅ 나머지 17개 칸은 정상</b>입니다 — <code>=SUM(G:AK)</code> 로 로그 전체를 읽습니다.<br>
+    고기값 · 미락 · 키위 · 콩나물 · 가게내부/외부카드 · 주류 · 음료 · 가스 · 4대보험 · 광고비 · 기타잡비용 · 기타세금 · 매출 3종
+  </div>
+</div>
+
+
+<!-- ══════════ 2 ══════════ -->
+<div class="card">
+  <h2><span class="tag t-amb">문제 2</span> 로그에 채워야 할 돈 · 11,135,086원</h2>
+  <div class="h2sub">시트는 이걸 제대로 읽습니다. 넣으면 바로 반영됩니다</div>
+
+  <div class="bar"><div class="m">카드</div><div class="track"><div class="fill" style="width:100%;background:#ef4444"></div></div><div class="v">7,179,520</div></div>
+  <div class="bar"><div class="m">주류</div><div class="track"><div class="fill" style="width:14.9%;background:#f59e0b"></div></div><div class="v">1,067,000</div></div>
+  <div class="bar"><div class="m">잡비</div><div class="track"><div class="fill" style="width:9.7%;background:#f59e0b"></div></div><div class="v">695,000</div></div>
+  <div class="bar"><div class="m">미락</div><div class="track"><div class="fill" style="width:8.3%;background:#f59e0b"></div></div><div class="v">597,870</div></div>
+  <div class="bar"><div class="m">콩나물</div><div class="track"><div class="fill" style="width:8.1%;background:#f59e0b"></div></div><div class="v">579,000</div></div>
+  <div class="bar"><div class="m">키위</div><div class="track"><div class="fill" style="width:4.9%;background:#fbbf24"></div></div><div class="v">350,000</div></div>
+  <div class="bar"><div class="m">고기값</div><div class="track"><div class="fill" style="width:4.8%;background:#fbbf24"></div></div><div class="v">346,000</div></div>
+  <div class="bar"><div class="m">음료</div><div class="track"><div class="fill" style="width:4.5%;background:#fbbf24"></div></div><div class="v">320,696</div></div>
+
+  <div class="note">
+    <b>가게내부카드가 718만원으로 압도적입니다.</b> 진성마트 국민카드 · 떡·식빵·소고기·다시다 외 네이버 ·
+    대동유통 · 시장 — 영수증을 안 올린 게 아니라, <b>계정 이름이 제각각이라 쓰레기 계정으로 흩어져 있다가
+    지난번에 지워진 것</b>입니다.
+  </div>
+</div>
+
+
+<!-- ══════════ 3 ══════════ -->
+<div class="card">
+  <h2><span class="tag t-blu">문제 3</span> 넣으면 안 되는 돈 · 10,804,200원</h2>
+  <div class="h2sub">제 표가 틀렸습니다. 시트 고정비 칸에 이미 들어 있습니다</div>
+
+  <table>
+    <tr><th>계정</th><th>시트 어디</th><th class="n">매달</th><th class="n">8달 합계</th></tr>
+    <tr><td><b>임대료</b></td><td>32행 · 손으로 적음</td><td class="n">1,650,000</td><td class="n">9,900,000</td></tr>
+    <tr><td><b>세무사비용</b></td><td>36행 · 손으로 적음</td><td class="n">110,000</td><td class="n">660,000</td></tr>
+    <tr><td><b>테이블링</b></td><td>38행 · 손으로 적음</td><td class="n">40,700</td><td class="n">244,200</td></tr>
+    <tr class="tot"><td colspan="3">합계</td><td class="n blu">10,804,200</td></tr>
+  </table>
+
+  <div class="note">
+    이 칸들은 <b>로그를 안 읽습니다.</b> 넣어봐야 시트에 안 나타나고 로그만 지저분해집니다.<br>
+    ⚠️ <b>7·8월에는 이미 넣어버렸습니다.</b> 해롭진 않지만 빼는 게 깔끔합니다.
+  </div>
+</div>
+
+
+<!-- ══════════ 4 ══════════ -->
+<div class="card">
+  <h2><span class="tag t-amb">문제 4</span> 시트가 수기보다 많은 것 · 7,909,405원</h2>
+  <div class="h2sub">중복이 남아 있을 수 있습니다. 사장님 판단이 필요합니다</div>
+
+  <table>
+    <tr><th>월</th><th>계정</th><th class="n">수기</th><th class="n">시트</th><th class="n">초과</th><th>짐작</th></tr>
+    <tr><td>4월</td><td>가게외부카드</td><td class="n">249,150</td><td class="n">1,694,550</td><td class="n red">+1,445,400</td><td class="mini">특양만인데 145만이 더 있음</td></tr>
+    <tr><td>2월</td><td>미락</td><td class="n">1,437,900</td><td class="n">2,722,237</td><td class="n red">+1,284,337</td><td class="mini">거래명세표와 겹쳤던 흔적</td></tr>
+    <tr><td>6월</td><td>직원급여</td><td class="n">8,639,999</td><td class="n">9,800,000</td><td class="n red">+1,160,001</td><td class="mini">4·5·7월과 같은 980만이 들어감</td></tr>
+    <tr><td>1월</td><td>미락</td><td class="n">1,320,720</td><td class="n">2,223,060</td><td class="n red">+902,340</td><td class="mini">거래명세표와 겹쳤던 흔적</td></tr>
+    <tr><td>2월</td><td>기타잡비용</td><td class="n">1,133,000</td><td class="n">1,684,300</td><td class="n amb">+551,300</td><td class="mini">수기2단계 때 넣은 것</td></tr>
+    <tr><td>3월</td><td>기타잡비용</td><td class="n">530,000</td><td class="n">1,032,130</td><td class="n amb">+502,130</td><td class="mini">수기2단계 때 넣은 것</td></tr>
+    <tr><td>5월</td><td>주류원가</td><td class="n">2,737,000</td><td class="n">3,154,100</td><td class="n amb">+417,100</td><td class="mini">-</td></tr>
+    <tr><td>1월</td><td>기타잡비용</td><td class="n">410,000</td><td class="n">785,520</td><td class="n amb">+375,520</td><td class="mini">수기2단계 때 넣은 것</td></tr>
+    <tr><td>4월</td><td>기타잡비용</td><td class="n">189,000</td><td class="n">562,180</td><td class="n amb">+373,180</td><td class="mini">수기2단계 때 넣은 것</td></tr>
+    <tr><td>8월</td><td>매장관리비</td><td class="n">1,309,400</td><td class="n">1,649,400</td><td class="n amb">+340,000</td><td class="mini">공동카메라·수리·하수도 — 이동 예정</td></tr>
+    <tr><td>1월</td><td>음료원가</td><td class="n">279,000</td><td class="n">450,000</td><td class="n amb">+171,000</td><td class="mini">-</td></tr>
+  </table>
+
+  <div class="note">
+    <b>기타잡비용 초과 네 건(1·2·3·4월 합 180만원)은 제가 수기2단계 때 넣은 것</b>입니다.
+    그때는 화재보험·위생교육비를 빼지 않았습니다. <b>지금 표는 뺀 값이라 초과로 잡힙니다.</b>
+  </div>
+</div>
+
+
+<!-- ══════════ 월별 ══════════ -->
+<div class="card">
+  <h2>월별 부족 · 초과</h2>
+  <div class="h2sub">7월은 완전히 맞습니다 · 1~3월이 가장 큽니다</div>
+
+  <table>
+    <tr><th>월</th><th class="n">부족</th><th class="n">초과</th><th>상태</th></tr>
+    <tr><td>1월</td><td class="n red">10,432,830</td><td class="n amb">1,456,360</td><td><span class="tag t-red">가장 큼</span></td></tr>
+    <tr><td>2월</td><td class="n red">13,204,530</td><td class="n amb">1,903,637</td><td><span class="tag t-red">가장 큼</span></td></tr>
+    <tr><td>3월</td><td class="n red">11,207,250</td><td class="n amb">516,130</td><td><span class="tag t-red">가장 큼</span></td></tr>
+    <tr><td>4월</td><td class="n amb">4,759,525</td><td class="n amb">1,940,320</td><td><span class="tag t-amb">보통</span></td></tr>
+    <tr><td>5월</td><td class="n amb">4,917,433</td><td class="n amb">478,223</td><td><span class="tag t-amb">보통</span></td></tr>
+    <tr><td>6월</td><td class="n amb">4,354,215</td><td class="n amb">1,205,001</td><td><span class="tag t-amb">보통</span></td></tr>
+    <tr><td>7월</td><td class="n grn">0</td><td class="n mini">69,734</td><td><span class="tag t-grn">완벽</span></td></tr>
+    <tr><td>8월</td><td class="n grn">340,000</td><td class="n mini">340,000</td><td><span class="tag t-grn">계정이동만 하면 끝</span></td></tr>
+  </table>
+
+  <div class="note g">
+    <b>1~3월이 큰 이유는 직원급여·알바급여가 통째로 없기 때문</b>입니다.
+    그런데 그건 <b>시트가 하루치만 읽어서</b> 넣어도 안 나타납니다.
+    <b>시트를 먼저 고쳐야 합니다.</b>
+  </div>
+</div>
+
+
+<!-- ══════════ 판단 ══════════ -->
+<div class="card">
+  <h2><span class="tag t-gry">판단</span> 사장님께 여쭐 것</h2>
+
+  <table>
+    <tr><th>무엇</th><th class="n">금액</th><th>지금 어떻게</th></tr>
+    <tr><td><b>「없음」</b> 1월</td><td class="n">1,570,420</td><td class="mini">정체 불명 — 안 넣음</td></tr>
+    <tr><td><b>승민수수료</b> 5월</td><td class="n">2,200,000</td><td class="mini">정체 불명 — 안 넣음</td></tr>
+    <tr><td><b>7월 임대료</b></td><td class="n">1,650,000</td><td class="mini">7월 수기에만 없음 — 빠뜨리신 건지</td></tr>
+    <tr><td><b>세무사비용 7월</b></td><td class="n">146,600</td><td class="mini">시트는 110,000 — 어느 게 맞는지</td></tr>
+    <tr><td><b>4월 가게외부카드</b></td><td class="n">+1,445,400</td><td class="mini">수기는 특양 249,150뿐 — 나머지가 뭔지</td></tr>
+    <tr><td><b>6월 직원급여</b></td><td class="n">+1,160,001</td><td class="mini">수기 864만 vs 시트 980만</td></tr>
+    <tr><td><b>1·2월 미락</b></td><td class="n">+2,186,677</td><td class="mini">시트가 수기보다 많음 — 중복 의심</td></tr>
+  </table>
+</div>
+
+
+<!-- ══════════ 순서 ══════════ -->
+<div class="card">
+  <h2>어떤 순서로 할 것인가</h2>
+  <div class="h2sub">시트를 먼저 고칩니다. 그래야 로그를 채운 게 보입니다</div>
+
+  <div class="flow">
+    <div class="step hot">
+      <div class="no">STEP 1</div>
+      <div class="ti">시트 고치기</div>
+      <div class="de">30·31·43행<br>1~9월 + 템플릿<br><b>이게 먼저입니다</b></div>
+    </div>
+    <div class="step hot">
+      <div class="no">STEP 2</div>
+      <div class="ti">굳은 칸 풀기</div>
+      <div class="de">가게 위생비 1~4월<br>97,000 → 수기 값</div>
+    </div>
+    <div class="step">
+      <div class="no">STEP 3</div>
+      <div class="ti">표에서 빼기</div>
+      <div class="de">임대료·세무사<br>테이블링<br>1,080만원</div>
+    </div>
+    <div class="step">
+      <div class="no">STEP 4</div>
+      <div class="ti">로그 채우기</div>
+      <div class="de">월별맞추기<br>1,113만원</div>
+    </div>
+    <div class="step ok">
+      <div class="no">STEP 5</div>
+      <div class="ti">다시 대조</div>
+      <div class="de">전체대조()<br>초과분 판단</div>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>지금까지 저는 4번만 반복했습니다.</b> 1번을 안 해서 아무리 채워도 숫자가 안 맞았습니다.<br>
+    <b>1번을 끝내면 사장님 말씀대로 「영수증만 올리면 끝」이 됩니다.</b> 백석과 같아집니다.
+  </div>
+</div>
+
+<div class="mini" style="text-align:center;margin-top:24px;color:#9ca3af">
+  원당 손익 현황판 · 2026-09-15 · 수기 손익계산서 1~8월 기준 · 읽기만 한 결과입니다
+</div>
+
+</div>
+</body>
+</html>
