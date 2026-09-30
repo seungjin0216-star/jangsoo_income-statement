@@ -3202,6 +3202,122 @@ function 자동집계_중복확인() {
   Logger.log('\n─ 읽기만 했습니다. 아무것도 안 고쳤습니다 ─');
 }
 
+/**
+ * 🔍 그날 발주 원본이 몇 줄인지 — 읽기만 합니다 (안전)
+ *
+ *   2026-09-30 — 원당 9/17 주류가 6줄로 잡혀 있었습니다.
+ *   자동집계가 잘못한 건지, 원본(식자재발주 시트)이 정말 6줄인지 가릅니다.
+ *
+ *   ⚠️ 원본이 6줄이면 → 9/17 문자 6통 사고 때 시트에도 6줄이 남은 것입니다
+ *   ⚠️ 원본이 1줄인데 로그가 6줄이면 → 자동집계가 중복을 만든 것입니다
+ *
+ *   쓰는 법:  발주원본_보기('2026-09-17')
+ *            발주원본_보기('2026-09-17', '원당점')
+ */
+function 발주원본_보기(날짜, 지점) {
+  var sheet = SpreadsheetApp.openById(STOCK_SS_ID).getSheetByName('식자재발주');
+  if (!sheet) { Logger.log('식자재발주 시트 없음'); return; }
+
+  var rows = sheet.getDataRange().getValues();
+  var 찾음 = 0;
+  Logger.log('── 식자재발주 시트에서 ' + 날짜 + (지점 ? ' · ' + 지점 : '') + ' 찾기 ──\n');
+
+  for (var i = 1; i < rows.length; i++) {
+    var d = rows[i][0];
+    var ymd;
+    if (d instanceof Date) {
+      ymd = Utilities.formatDate(d, 'Asia/Seoul', 'yyyy-MM-dd');
+    } else {
+      var t = String(d);
+      var m1 = t.match(/(\d{4})-(\d{2})-(\d{2})/);
+      var m2 = t.match(/(\d{2})\.(\d{2})\.(\d{2})/);
+      ymd = m1 ? m1[0] : (m2 ? '20' + m2[1] + '-' + m2[2] + '-' + m2[3] : String(d));
+    }
+    if (ymd !== 날짜) continue;
+    if (지점 && String(rows[i][1] || '').trim() !== 지점) continue;
+
+    찾음++;
+    Logger.log('시트 ' + (i + 1) + '행  [' + rows[i][1] + '] ' + rows[i][2]);
+    Logger.log('     ' + String(rows[i][3] || '').replace(/\n/g, ' ⏎ ').slice(0, 120));
+  }
+
+  Logger.log('\n합계 ' + 찾음 + '줄');
+  if (찾음 > 1) {
+    Logger.log('\n⚠️ 원본이 여러 줄입니다.');
+    Logger.log('   같은 발주가 문자로 여러 번 나가면서 시트에도 그만큼 쌓인 것입니다.');
+    Logger.log('   → 손익을 맞추려면 로그에서 한 줄만 남기면 됩니다.');
+    Logger.log('   → 원본까지 정리하려면 식자재발주 시트의 중복 줄을 지우십시오.');
+  }
+}
+
+/**
+ * 🧹 옛 표시(row 번호 붙은 것)를 정리 — 지우지 않습니다
+ *
+ *   2026-09-30 — marker 에서 행 번호를 뺐습니다. 그래서 옛 줄들은
+ *   새 표시와 안 맞아 그대로 남습니다. 그대로 두면 이중으로 잡힙니다.
+ *
+ *   ⚠️ **지우지 않습니다.** 금액을 0 으로 만들고 분류에 「_중복」을 붙입니다.
+ *      손익 시트는 정해진 계정만 SUMIFS 로 읽으므로 0원 + 다른 분류면 안 잡힙니다.
+ *      시트에는 그대로 남아 언제든 되돌릴 수 있습니다.
+ *
+ *   쓰는 법
+ *     옛표시정리_미리보기()   무엇이 바뀔지만 봅니다
+ *     옛표시정리_적용()       실제로 정리합니다
+ *
+ *   ⚠️ 이걸 한 뒤에 식자재원가_전체동기화() 를 돌리면 새 표시로 깨끗하게 들어갑니다.
+ */
+function 옛표시정리_미리보기() { 옛표시정리_(true); }
+function 옛표시정리_적용()   { 옛표시정리_(false); }
+
+function 옛표시정리_(dryRun) {
+  Logger.log(dryRun ? '── 미리보기 (아무것도 안 고칩니다) ──\n' : '── 정리합니다 ──\n');
+
+  ['백석점', '원당점'].forEach(function (b) {
+    var cfg = BRANCH_CONFIG[b];
+    if (!cfg) return;
+    var sh = SpreadsheetApp.openById(cfg.ssId).getSheetByName('지출및매출로그');
+    if (!sh) { Logger.log('[' + b + '] 로그 시트 없음'); return; }
+
+    var rows = sh.getDataRange().getValues();
+    var 대상 = [];
+    var 금액합 = 0;
+
+    for (var i = 1; i < rows.length; i++) {
+      var marker = String(rows[i][5] || '');
+      // 옛 표시만 — 끝에 _row숫자 가 붙은 것
+      if (marker.indexOf('[자동]') !== 0) continue;
+      if (!/_row\d+$/.test(marker)) continue;
+      var 금액 = Number(rows[i][3]) || 0;
+      대상.push({ 행: i + 1, 분류: String(rows[i][1]), 날: rows[i][0], 금액: 금액, marker: marker });
+      금액합 += 금액;
+    }
+
+    Logger.log('[' + b + ']  옛 표시 ' + 대상.length + '줄 · ' + 금액합.toLocaleString() + '원');
+    대상.slice(0, 12).forEach(function (t) {
+      var d = (t.날 instanceof Date) ? Utilities.formatDate(t.날, 'Asia/Seoul', 'yyyy-MM-dd') : String(t.날);
+      Logger.log('   ' + t.행 + '행  ' + d + ' · ' + t.분류 + ' · ' + t.금액.toLocaleString() + '원');
+    });
+    if (대상.length > 12) Logger.log('   … 외 ' + (대상.length - 12) + '줄');
+
+    if (dryRun || !대상.length) return;
+
+    대상.forEach(function (t) {
+      sh.getRange(t.행, 2).setValue(t.분류 + '_중복');    // B: 분류
+      sh.getRange(t.행, 4).setValue(0);                   // D: 금액 → 0
+      sh.getRange(t.행, 6).setValue(t.marker + '_정리됨'); // F: 표시
+    });
+    SpreadsheetApp.flush();
+    Logger.log('   ✅ ' + 대상.length + '줄 정리 (금액 0 · 분류에 _중복 표시)');
+  });
+
+  if (dryRun) {
+    Logger.log('\n※ 실제로 정리하려면  옛표시정리_적용()  을 실행하세요.');
+    Logger.log('※ 지우지 않습니다. 금액을 0 으로 만들고 표시만 바꿉니다.');
+  } else {
+    Logger.log('\n※ 이제  식자재원가_전체동기화()  를 돌리면 새 표시로 깨끗하게 들어갑니다.');
+  }
+}
+
 function 식자재원가_전체동기화() {
   ['백석점', '원당점'].forEach(function (b) {
     try { syncLiquorCosts(b, null); }        // null = 기간 제한 없음
@@ -3445,6 +3561,7 @@ function syncLiquorCosts(branchName, months) {
 
   var rows  = sheet.getDataRange().getValues();
   var count = 0;
+  var 모음  = {};   // 분류|날짜 → { 금액, 내역, 본것 }  — 날짜별로 한 줄만 기록합니다
 
   for (var i = 1; i < rows.length; i++) {
     var row      = rows[i];
@@ -3519,13 +3636,44 @@ function syncLiquorCosts(branchName, months) {
     });
 
     if (totalCost > 0) {
-      var marker = '[자동]' + category + '_' + branchName + '_' + ymd + '_row' + i;
-      var detail = itemDetails.join(', ') || supplier + ' 발주 자동집계';
-      if (upsertLogEntry(logSheet, ymd, category, detail, totalCost, branchName, marker)) {
-        count++;
+      // 🔴 2026-09-30 — 바로 쓰지 않고 날짜별로 모읍니다. 아래 설명 참조
+      var 키 = category + '|' + ymd;
+      if (!모음[키]) 모음[키] = { category: category, ymd: ymd, 금액: 0, 내역: [], 본것: {} };
+      var g = 모음[키];
+
+      // ⚠️ 같은 날 **같은 내용**이 여러 줄이면 한 번만 셉니다.
+      //    9/17 원당 주류 6통 사고 때 똑같은 발주가 시트에 여섯 줄 남았고,
+      //    그게 192,000원 × 6 = 115만원으로 잡혀 있었습니다.
+      //    ⚠️ 내용이 **다르면** 더합니다. 그건 추가 발주라 진짜 나간 돈입니다.
+      var 내용키 = itemLine.replace(/\s+/g, '');
+      if (g.본것[내용키]) {
+        Logger.log('  ⏭  같은 내용 건너뜀 [' + category + '] ' + ymd + ' · ' + itemLine.slice(0, 40));
+        continue;
       }
+      g.본것[내용키] = true;
+      g.금액 += totalCost;
+      itemDetails.forEach(function (x) { g.내역.push(x); });
     }
   }
+
+  // ── 날짜별로 한 줄씩 기록합니다 ──
+  //
+  //  🔴 2026-09-30 — 그전에는 원본 한 줄마다 로그 한 줄을 넣었습니다.
+  //     표시(marker)에 식자재발주 시트의 **행 번호**가 들어 있었습니다.
+  //       [자동]주류원가_원당점_2026-09-17_row283
+  //     ⚠️ 시트에서 줄을 옮기거나 지우면 행 번호가 밀려 다른 표시가 됩니다.
+  //        그러면 갱신이 아니라 새 줄로 들어가 중복이 생깁니다.
+  //        9/20 에 원당 기록을 _원당 탭으로 옮기면서 실제로 그렇게 됐습니다.
+  //
+  //     이제 「분류·지점·날짜」 하나로 묶습니다. 행 번호와 무관합니다.
+  Object.keys(모음).forEach(function (키) {
+    var g = 모음[키];
+    if (g.금액 <= 0) return;
+    var marker = '[자동]' + g.category + '_' + branchName + '_' + g.ymd;
+    var detail = g.내역.join(', ') || (g.category + ' 발주 자동집계');
+    if (detail.length > 400) detail = detail.slice(0, 397) + '…';
+    if (upsertLogEntry(logSheet, g.ymd, g.category, detail, g.금액, branchName, marker)) count++;
+  });
 
   Logger.log('주류·음료 동기화 완료: ' + count + '건');
 }
