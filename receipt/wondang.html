@@ -46,6 +46,7 @@ body{font-family:-apple-system,"Helvetica Neue",sans-serif;background:var(--bg);
 .qi-type{font-size:15px;font-weight:700;color:var(--tx)}
 .qi-file{font-size:12px;color:var(--tx2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px}
 .qi-status{font-size:20px;min-width:28px;text-align:right}
+.qi-err{font-size:11px;color:#ff6b6b;margin-top:4px;word-break:break-all;line-height:1.4}
 .submit-btn{display:block;width:100%;padding:20px;margin:20px 0 10px;font-size:19px;font-weight:800;background:var(--acc);color:#fff;border:none;border-radius:var(--r2);cursor:pointer;transition:transform .1s,opacity .15s;box-shadow:0 4px 24px rgba(255,107,53,.4)}
 .submit-btn:not(:disabled):active{transform:scale(.97)}
 .submit-btn:disabled{opacity:.3;cursor:not-allowed;box-shadow:none}
@@ -157,7 +158,85 @@ body{font-family:-apple-system,"Helvetica Neue",sans-serif;background:var(--bg);
 //    ⚠️ 이 주소는 알바계산기 「직원」 탭도 함께 씁니다. 배포를 지우지 마세요.
 var GAS_URL="https://script.google.com/macros/s/AKfycbxKmN_Uo5hIGPm8ITQhM80FxinEL6q1dFiHZAaGR-eRsBb9EDno4C8et31a4mvwzkU9/exec";
 var STORE="원당점";
-var _docType="",_b64="",_mime="",_fname="",_queue=[],_running=false;
+var _docType="",_b64="",_mime="",_fname="",_hash="",_queue=[],_running=false;
+
+/* ══════════════════════════════════════════════════════════════
+   🔒 같은 사진을 두 번 올리는 것 막기 (2026-09-30)
+
+   왜 넣었나
+     올라갔는데 화면에는 「전송 실패」가 떴습니다.
+     그걸 보고 같은 사진을 여러 번 올리셨고, 손익에 중복으로 잡혔습니다.
+     원당 9월만 100만원 넘게 어긋났습니다.
+
+   두 가지를 같이 고칩니다
+     ① 거짓 실패를 없앱니다
+        옛 방식: POST 하고 서버 답장을 기다림
+                 ⚠️ 구글은 답장을 script.google.com → script.googleusercontent.com
+                    으로 넘기고, 브라우저가 CORS 로 막습니다.
+                    그때 파일은 **이미 드라이브에 들어가 있습니다.**
+        새 방식: no-cors 로 보내고 답을 안 읽습니다.
+                 대신 GET(JSONP)으로 「지문이 서버에 생겼나」를 다시 물어봅니다.
+                 ⚠️ GET 은 CORS 를 아예 안 거칩니다. 그래서 확실히 들립니다.
+                 → 보냈다는 말을 **서버한테 직접 듣습니다**
+
+     ② 같은 사진이면 아예 안 올립니다
+        사진 바이트를 SHA-256 으로 요약한 것이 「지문」입니다.
+        바이트가 하나라도 다르면 지문이 다릅니다 → 오탐 0 · 미탐 0
+
+   ⚠️ 지문은 **압축 전 원본 파일**로 냅니다.
+      아래 handleFile 이 사진을 1600px · 품질 0.85 로 다시 압축합니다.
+      압축 결과는 폰·브라우저마다 미세하게 다를 수 있어 지문이 흔들립니다.
+
+   ⚠️ 못 막는 경우 — 같은 영수증을 **다시 촬영**한 것.
+      파일이 아예 다르므로 기계는 구분할 수 없습니다.
+      그건 GAS 의 영수증중복_확인() 으로 사후에 찾습니다.
+   ══════════════════════════════════════════════════════════════ */
+
+/** 원본 파일 → 지문(hex 64글자). 못 내면 "" — 그래도 업로드는 계속합니다 */
+function 지문내기_(file){
+  try{
+    if(!file||!file.arrayBuffer||!window.crypto||!crypto.subtle) return Promise.resolve("");
+    return file.arrayBuffer()
+      .then(function(buf){ return crypto.subtle.digest("SHA-256",buf); })
+      .then(function(d){
+        return Array.prototype.map.call(new Uint8Array(d),function(b){
+          return ("0"+b.toString(16)).slice(-2);
+        }).join("");
+      })
+      .catch(function(){ return ""; });
+  }catch(e){ return Promise.resolve(""); }
+}
+
+/* 서버에 이 지문이 있나 묻기 (JSONP — CORS 를 안 거칩니다)
+   ⚠️ 답이 세 가지입니다. 「없음」과 「모르겠음」을 꼭 구분해야 합니다
+        {…}        있음
+        null       확실히 없음
+        undefined  물어보지 못함 (인터넷 끊김 등)  ← 실패라고 단정하면 안 됩니다 */
+function 사진있나_(hash){
+  return new Promise(function(done){
+    if(!hash){ done(undefined); return; }
+    var cbName="_영수증cb"+Date.now()+Math.floor(Math.random()*10000);
+    var s=document.createElement("script");
+    var 끝=false;
+    function 치움(){
+      if(끝)return; 끝=true;
+      try{ delete window[cbName]; }catch(e){ window[cbName]=undefined; }
+      if(s.parentNode) s.parentNode.removeChild(s);
+    }
+    window[cbName]=function(r){
+      var 답 = (r && r.ok) ? (r.있음 ? (r.정보||{}) : null) : undefined;
+      치움(); done(답);
+    };
+    s.onerror=function(){ 치움(); done(undefined); };
+    setTimeout(function(){ if(!끝){ 치움(); done(undefined); } },9000);
+    s.src=GAS_URL+"?action=사진있나&store="+encodeURIComponent(STORE)+
+          "&h="+encodeURIComponent(hash)+"&callback="+cbName;
+    document.body.appendChild(s);
+  });
+}
+
+function 잠깐_(ms){ return new Promise(function(r){ setTimeout(r,ms); }); }
+
 /* ── 영수증 없이 금액만 넣기 (2026-09-02) ──────────────────────
    당근 광고비는 충전식이라 영수증이 없습니다.
    수기로 시트에 적으면 결국 안 하게 되므로 앱에서 두 번 눌러 끝나게 만들었습니다.
@@ -237,6 +316,10 @@ function handleFile(inp){
   if(inp.files.length>1){handleMultiFiles(inp);return;}
   var f=inp.files[0];_fname=f.name;_mime="image/jpeg";
   document.getElementById("phTxt").textContent="압축 중...";
+  /* ⚠️ 값이 아니라 **약속(Promise)** 을 담습니다.
+     사진을 고르자마자 바로 「올리기」를 누르면 지문 계산이 아직 안 끝나 있습니다.
+     값으로 담으면 그때 빈 문자열이 들어가 중복 차단이 안 걸립니다. */
+  _hash=지문내기_(f);                              // ⚠️ 압축 전 원본으로
   var r=new FileReader();
   r.onload=function(e){
     var img=new Image();
@@ -269,6 +352,7 @@ function handleMultiFiles(inp){
   document.getElementById("phTxt").textContent="사진 "+total+"장 처리 중...";
   document.getElementById("phSub").textContent="0/"+total;
   files.forEach(function(f){
+    var 지문대기=지문내기_(f);                      // ⚠️ 압축 전 원본으로
     var r=new FileReader();
     r.onload=function(e){
       var img=new Image();
@@ -279,7 +363,8 @@ function handleMultiFiles(inp){
         c.getContext("2d").drawImage(img,0,0,w,h);
         var url=c.toDataURL("image/jpeg",0.85);
         var b64=url.split(",")[1];
-        _queue.push({docType:_docType,b64:b64,mime:"image/jpeg",fname:f.name,status:"대기"});
+        _queue.push({docType:_docType,b64:b64,mime:"image/jpeg",fname:f.name,
+                     status:"대기",hash:지문대기});     // ⚠️ 약속을 그대로 담습니다
         loaded++;
         document.getElementById("phSub").textContent=loaded+"/"+total;
         renderQueue();
@@ -296,8 +381,9 @@ function handleMultiFiles(inp){
 }
 function addToQueue(){
   if(!_docType||!_b64)return;
-  _queue.push({docType:_docType,b64:_b64,mime:_mime,fname:_fname,status:"대기"});
-  renderQueue();_b64="";_fname="";
+  _queue.push({docType:_docType,b64:_b64,mime:_mime,fname:_fname,status:"대기",hash:_hash});
+  renderQueue();_b64="";_fname="";_hash="";
+
   var prev=document.getElementById("preview");prev.src="";prev.style.display="none";
   document.getElementById("photoBox").classList.remove("has");
   document.getElementById("phTxt").textContent="여기를 눌러 사진 선택";
@@ -310,8 +396,11 @@ function renderQueue(){
   var wrap=document.getElementById("queueWrap");
   wrap.style.display=_queue.length?"block":"none";
   document.getElementById("queueList").innerHTML=_queue.map(function(item,i){
-    var icon=item.status==="대기"?"🕐":item.status==="업로드중"?"⏳":item.status==="완료"?"✅":"❌";
-    return "<div class='queue-item'><span class='qi-num'>"+(i+1)+"</span><div class='qi-info'><div class='qi-type'>"+item.docType+"</div><div class='qi-file'>"+(item.fname||"파일")+"</div></div><span class='qi-status'>"+icon+"</span></div>";
+    var icon=item.status==="대기"?"🕐":item.status==="업로드중"?"⏳":
+             item.status==="완료"?"✅":item.status==="이미있음"?"♻️":
+             item.status==="확인못함"?"⚠️":"❌";
+    var errLine=item.errMsg?"<div class='qi-err'>"+item.errMsg+"</div>":"";
+    return "<div class='queue-item'><span class='qi-num'>"+(i+1)+"</span><div class='qi-info'><div class='qi-type'>"+item.docType+"</div><div class='qi-file'>"+(item.fname||"파일")+"</div>"+errLine+"</div><span class='qi-status'>"+icon+"</span></div>";
   }).join("");
 }
 function submitAll(){
@@ -325,24 +414,97 @@ function submitAll(){
 }
 function processNext(idx){
   while(idx<_queue.length&&_queue[idx].status!=="대기")idx++;
-  if(idx>=_queue.length){
-    _running=false;
-    var done=_queue.filter(function(q){return q.status==="완료";}).length;
-    var err=_queue.filter(function(q){return q.status==="오류";}).length;
-    var btn=document.getElementById("submitBtn");
-    if(err===0){showStatus("✅","모두 완료!",done+"개 파일이 저장됐어요.\n새벽 2시에 자동 분류됩니다.");btn.innerHTML="✅ 완료! 새로고침하여 계속";}
-    else{showStatus("⚠️","일부 오류",done+"개 성공 / "+err+"개 오류");btn.innerHTML="⚠️ 다시 시도";}
-    btn.disabled=false;btn.onclick=function(){location.reload();};return;
-  }
+  if(idx>=_queue.length){ 끝맺기_(); return; }
+
   var item=_queue[idx];item.status="업로드중";renderQueue();
-  showStatus("⏳","업로드 중... ("+(idx+1)+"/"+_queue.length+")",item.docType+" 저장 중...");
-  fetch(GAS_URL,{
-    method:"POST",
-    body:JSON.stringify({base64:item.b64,mime:item.mime,docType:item.docType,store:STORE,fname:item.fname})
-  })
-  .then(function(r){return r.json();})
-  .then(function(r){item.status=r.success?"완료":"오류";renderQueue();processNext(idx+1);})
-  .catch(function(){item.status="오류";renderQueue();processNext(idx+1);});
+  var 몇번째="("+(idx+1)+"/"+_queue.length+")";
+  showStatus("⏳","확인 중... "+몇번째,item.docType+" — 전에 올린 사진인지 봅니다");
+
+  /* ⓪ 지문 계산이 끝날 때까지 기다립니다.
+        ⚠️ item.hash 는 약속(Promise)입니다. 값으로 바꿔 담아둡니다. */
+  Promise.resolve(item.hash).catch(function(){ return ""; }).then(function(h){
+    item.hash = h || "";
+
+  /* ① 올리기 전 — 이 사진 이미 서버에 있나 */
+  return 사진있나_(item.hash).then(function(있음){
+    if(있음){
+      item.status="이미있음";
+      item.errMsg="전에 올린 사진입니다"+(있음.시각?" ("+있음.시각+")":"");
+      renderQueue();processNext(idx+1);
+      return null;
+    }
+
+    /* ② 올린다 — ⚠️ no-cors. 답을 안 읽습니다.
+          옛 방식은 여기서 CORS 에 막혀 「전송 실패」가 떴습니다.
+          파일은 이미 들어가 있는데도 말입니다. */
+    showStatus("⏳","업로드 중... "+몇번째,item.docType+" 저장 중...");
+    return fetch(GAS_URL,{
+      method:"POST",mode:"no-cors",
+      headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body:JSON.stringify({base64:item.b64,mime:item.mime,docType:item.docType,
+                           store:STORE,fname:item.fname,hash:item.hash})
+    }).then(function(){
+
+      /* ③ 서버한테 직접 확인 — 「방금 그 사진 들어갔나요?」
+            ⚠️ 이게 핵심입니다. 보낸 것과 보냈다고 듣는 것은 다른 일입니다.
+               GET 은 CORS 를 안 거치므로 답이 확실히 들립니다. */
+      if(!item.hash){                       // 지문을 못 냈으면 확인할 방법이 없습니다
+        item.status="완료";renderQueue();processNext(idx+1);return;
+      }
+      showStatus("⏳","확인 중... "+몇번째,"서버에 잘 들어갔는지 봅니다");
+      return 잠깐_(2500).then(function(){ return 사진있나_(item.hash); })
+        .then(function(들어갔나){
+          if(들어갔나){ item.status="완료"; renderQueue(); processNext(idx+1); return; }
+          // 한 번 더 — 시트 반영이 늦을 수 있습니다
+          return 잠깐_(3500).then(function(){ return 사진있나_(item.hash); })
+            .then(function(두번째){
+              if(두번째){ item.status="완료"; }
+              else if(두번째===null){        // 확실히 없음 → 진짜 실패
+                item.status="오류"; item.errMsg="서버에 안 들어갔습니다. 다시 시도해주세요";
+              }else{                          // undefined → 물어보지 못함
+                item.status="확인못함";
+                item.errMsg="올렸지만 확인을 못 했습니다 (인터넷 확인). 다시 올려도 중복되지 않습니다";
+              }
+              renderQueue();processNext(idx+1);
+            });
+        });
+    });
+  });
+  }).catch(function(e){
+    /* ⚠️ 여기까지 왔다는 건 보내기 자체가 안 됐다는 뜻입니다.
+       no-cors 는 서버 오류로는 안 터지고, 네트워크가 끊겼을 때만 터집니다. */
+    item.status="오류";item.errMsg=e.message||String(e);
+    renderQueue();processNext(idx+1);
+  });
+}
+
+function 끝맺기_(){
+  _running=false;
+  var 수=function(s){ return _queue.filter(function(q){return q.status===s;}).length; };
+  var done=수("완료"), dup=수("이미있음"), warn=수("확인못함"), err=수("오류");
+  var btn=document.getElementById("submitBtn");
+
+  var 줄=[];
+  if(done) 줄.push(done+"장 저장");
+  if(dup)  줄.push(dup+"장은 전에 올린 사진이라 건너뜀");
+  if(warn) 줄.push(warn+"장은 확인 못 함");
+  if(err)  줄.push(err+"장 실패");
+
+  if(err){
+    showStatus("⚠️","일부 실패",줄.join("\n")+"\n\n다시 올려도 중복되지 않습니다.");
+    btn.innerHTML="⚠️ 다시 시도";
+  }else if(warn){
+    showStatus("⚠️","확인 못 한 것이 있습니다",줄.join("\n")+
+               "\n\n올라갔을 가능성이 높습니다.\n걱정되면 다시 올려도 중복되지 않습니다.");
+    btn.innerHTML="다시 올리기";
+  }else if(dup&&!done){
+    showStatus("♻️","전부 전에 올린 사진입니다",줄.join("\n")+"\n\n중복으로 들어가지 않았습니다.");
+    btn.innerHTML="✅ 확인";
+  }else{
+    showStatus("✅","모두 완료!",줄.join("\n")+"\n새벽 2시에 자동 분류됩니다.");
+    btn.innerHTML="✅ 완료! 새로고침하여 계속";
+  }
+  btn.disabled=false;btn.onclick=function(){location.reload();};
 }
 function showStatus(icon,txt,detail){
   var s=document.getElementById("status");s.classList.add("show");

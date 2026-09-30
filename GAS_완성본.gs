@@ -1560,14 +1560,133 @@ function staffSyncNow() {
  */
 function doGet(e) {
   var action = (e && e.parameter && e.parameter.action) || '';
-  if (action === 'staffList') {
+  var cb     = (e && e.parameter && e.parameter.callback) || '';   // JSONP
+
+  // ── 이 사진 이미 올렸나 (2026-09-30) ───────────────────────
+  //    GET 이라 CORS 를 안 거칩니다. 그래서 답을 확실히 들을 수 있습니다.
+  //    화면이 ① 올리기 전 ② 올린 뒤 두 번 물어봅니다.
+  if (action === '사진있나') {
     try {
-      return jsonOut_({ ok: true, data: staffList_() });
+      var 것 = 지문찾기_(e.parameter.store || '백석점',
+                        e.parameter.h  || '',        // 원본지문
+                        e.parameter.h2 || '');       // 저장지문 (있으면)
+      return out_(cb, { ok: true, 있음: !!것, 정보: 것 || null });
     } catch (err) {
-      return jsonOut_({ ok: false, error: err.message });
+      return out_(cb, { ok: false, error: err.message });
     }
   }
-  return jsonOut_({ ok: true, message: '장수한우곱창 손익계산서 API' });
+
+  if (action === 'staffList') {
+    try {
+      return out_(cb, { ok: true, data: staffList_() });
+    } catch (err) {
+      return out_(cb, { ok: false, error: err.message });
+    }
+  }
+  return out_(cb, { ok: true, message: '장수한우곱창 손익계산서 API' });
+}
+
+/** JSONP 면 감싸서, 아니면 그냥 JSON 으로 */
+function out_(cb, obj) {
+  var s = JSON.stringify(obj);
+  if (cb) {
+    return ContentService.createTextOutput(cb + '(' + s + ')')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+  return ContentService.createTextOutput(s)
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+
+// ════════════════════════════════════════════════════════════
+// 🔒 사진 지문 — 같은 사진이 두 번 들어오는 것을 막습니다
+//
+//  왜 필요한가 (2026-09-30 사장님 확인)
+//    영수증을 올리면 실제로는 드라이브에 들어갔는데 화면에는 「전송 실패」가
+//    떴습니다. 어머니가 그걸 보고 같은 사진을 여러 번 올리셨습니다.
+//    그렇게 들어간 중복이 손익에 그대로 잡혔습니다.
+//
+//  어떻게 막나
+//    사진의 바이트를 SHA-256 으로 요약합니다. 이걸 「지문」이라 부릅니다.
+//    ⚠️ 바이트가 하나라도 다르면 지문이 달라집니다.
+//       → 같은 파일이면 지문이 반드시 같고, 다른 파일이면 반드시 다릅니다
+//       → 잘못 거를 일도, 놓칠 일도 없습니다 (오류율 0%)
+//
+//  ⚠️ 못 막는 경우 — 같은 영수증을 **다시 촬영**한 것
+//     사진 파일이 아예 다르므로 기계는 구분할 수 없습니다.
+//     이건 영수증중복_확인() 으로 사후에 찾습니다.
+//
+//  어디에 적나
+//    지점 시트의 「올린사진」 탭. 지문 · 파일명 · 파일ID · 시각 · 문서유형
+//    ⚠️ 드라이브 검색은 색인이 늦어 방금 올린 것을 못 찾을 수 있습니다.
+//       그래서 시트에 적습니다. 시트는 바로 읽힙니다.
+// ════════════════════════════════════════════════════════════
+
+//  ⚠️ 지문이 두 개인 이유 (2026-09-30)
+//     화면이 사진을 1600px · 품질 0.85 로 **다시 압축해서** 보냅니다.
+//     같은 원본이라도 폰·브라우저가 다르면 압축 결과가 미세하게 다를 수 있습니다.
+//     그러면 저장된 바이트의 지문도 달라져 중복을 놓칩니다.
+//
+//       원본지문   화면이 **고르기 전 원본 파일** 바이트로 계산해 보냅니다  ← 주력
+//                 같은 파일을 다시 올리면 폰이 달라도 100% 같습니다
+//       저장지문   서버가 **받은 바이트**로 계산합니다                    ← 보조
+//                 화면이 원본지문을 안 보내는 옛 버전을 위한 안전망
+//
+//     ⚠️ 둘 중 **하나라도** 맞으면 중복으로 봅니다.
+var 사진탭_ = '올린사진';
+var 사진탭머리_ = ['저장지문', '파일명', '파일ID', '올린시각', '문서유형', '원본지문'];
+
+function 사진탭가져오기_(store) {
+  var cfg = BRANCH_CONFIG[store];
+  if (!cfg) throw new Error('알 수 없는 지점: ' + store);
+  var ss = SpreadsheetApp.openById(cfg.ssId);
+  var sh = ss.getSheetByName(사진탭_);
+  if (!sh) {
+    sh = ss.insertSheet(사진탭_);
+    sh.appendRow(사진탭머리_);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+/** 바이트 → 지문(hex 64글자) */
+function 지문_(bytes) {
+  var d = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, bytes);
+  var s = '';
+  for (var i = 0; i < d.length; i++) {
+    var b = d[i] & 0xff;
+    s += (b < 16 ? '0' : '') + b.toString(16);
+  }
+  return s;
+}
+
+/**
+ * 이 지문이 이미 있나. 있으면 { 파일명, 파일ID, 시각 }, 없으면 null
+ * ⚠️ 저장지문(1열) · 원본지문(6열) 둘 다 봅니다. 어느 쪽이 맞아도 중복입니다.
+ */
+function 지문찾기_(store, hash, hash2) {
+  if (!hash && !hash2) return null;
+  var sh = 사진탭가져오기_(store);
+  var last = sh.getLastRow();
+  if (last < 2) return null;
+  var v = sh.getRange(2, 1, last - 1, 6).getValues();
+  for (var i = v.length - 1; i >= 0; i--) {          // 최근 것부터 — 보통 앞에서 끝납니다
+    var 저장 = String(v[i][0]).trim();
+    var 원본 = String(v[i][5]).trim();
+    var 맞음 = (hash  && (저장 === hash  || 원본 === hash)) ||
+               (hash2 && (저장 === hash2 || 원본 === hash2));
+    if (맞음) {
+      return { 파일명: String(v[i][1]), 파일ID: String(v[i][2]), 시각: String(v[i][3]) };
+    }
+  }
+  return null;
+}
+
+function 지문적기_(store, hash, fileName, fileId, docType, 원본지문) {
+  var sh = 사진탭가져오기_(store);
+  sh.appendRow([hash, fileName, fileId,
+                Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd HH:mm:ss'),
+                docType || '', 원본지문 || '']);
 }
 
 function doPost(e) {
@@ -1592,19 +1711,70 @@ function doPost(e) {
     var config = BRANCH_CONFIG[store];
     if (!config) throw new Error("알 수 없는 지점: " + store);
 
-    var folder    = DriveApp.getFolderById(config.folderId);
-    var timestamp = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyyMMdd_HHmmss");
-    var fileName  = "[웹앱][" + docType + "] " + timestamp + ".jpg";
-
     var bytes = Utilities.base64Decode(base64);
-    var blob  = Utilities.newBlob(bytes, mime, fileName);
-    var file  = folder.createFile(blob);
 
-    Logger.log("✅ 저장 완료: " + fileName + " (" + store + ")");
+    // ── 🔒 같은 사진인가 (2026-09-30) ─────────────────────────
+    //    ⚠️ 잠금을 겁니다. 어머니가 여러 장을 한꺼번에 올리시면
+    //       요청이 동시에 들어와 둘 다 「없음」으로 보고 둘 다 저장됩니다.
+    var 지문 = 지문_(bytes);                          // 저장지문 — 받은 바이트
+    var 원본지문 = String(data.hash || '');           // 원본지문 — 화면이 원본 파일로 계산해 보낸 것
+    var lock = LockService.getScriptLock();
+    try { lock.waitLock(20000); } catch (e) { /* 못 잡아도 계속 — 아래에서 한 번 더 봅니다 */ }
 
-    return ContentService
-      .createTextOutput(JSON.stringify({ success: true, fileName: fileName, fileId: file.getId() }))
-      .setMimeType(ContentService.MimeType.JSON);
+    try {
+      var 이미 = 지문찾기_(store, 지문, 원본지문);
+      if (이미) {
+        Logger.log("♻️ 이미 올린 사진입니다 — 저장하지 않습니다: " + 이미.파일명 + " (" + 이미.시각 + ")");
+        return ContentService
+          .createTextOutput(JSON.stringify({
+            success: true, dup: true, hash: 지문,
+            fileName: 이미.파일명, fileId: 이미.파일ID, 올린시각: 이미.시각
+          }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+
+      var folder = DriveApp.getFolderById(config.folderId);
+
+      // ── 안전망: 드라이브 파일명도 한 번 봅니다 ────────────────
+      //    ⚠️ 파일은 만들어졌는데 지문적기_ 가 실패하면 시트에 기록이 없습니다.
+      //       그러면 화면은 「실패」로 보고 다시 올려 중복이 생깁니다.
+      //       그래서 파일명 끝에 지문 앞 12글자를 박아두고 여기서 확인합니다.
+      //    ⚠️ 드라이브 검색은 색인이 늦을 수 있어 **보조**입니다. 시트가 주력입니다.
+      try {
+        var 조각 = 지문.slice(0, 12);
+        var it = folder.searchFiles('title contains "' + 조각 + '" and trashed = false');
+        if (it.hasNext()) {
+          var f0 = it.next();
+          Logger.log("♻️ 드라이브에 같은 지문의 파일이 있습니다 — 저장하지 않습니다: " + f0.getName());
+          지문적기_(store, 지문, f0.getName(), f0.getId(), docType, 원본지문);  // 빠진 기록을 메웁니다
+          return ContentService
+            .createTextOutput(JSON.stringify({ success: true, dup: true, hash: 지문,
+                                               fileName: f0.getName(), fileId: f0.getId() }))
+            .setMimeType(ContentService.MimeType.JSON);
+        }
+      } catch (e) { Logger.log('드라이브 확인 건너뜀: ' + e.message); }
+
+      var timestamp = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyyMMdd_HHmmss");
+      // ⚠️ 파일명 끝에 지문 앞 12글자를 붙입니다.
+      //    시트가 날아가도 드라이브 파일명만으로 중복을 다시 찾을 수 있습니다.
+      var fileName  = "[웹앱][" + docType + "] " + timestamp + "_" + 지문.slice(0, 12) + ".jpg";
+
+      var blob = Utilities.newBlob(bytes, mime, fileName);
+      var file = folder.createFile(blob);
+
+      // ⚠️ 파일을 만든 **뒤에** 적습니다. 파일 만들기가 실패하면 지문도 안 남아야
+      //    다음에 다시 올릴 수 있습니다.
+      지문적기_(store, 지문, fileName, file.getId(), docType, 원본지문);
+
+      Logger.log("✅ 저장 완료: " + fileName + " (" + store + ")");
+
+      return ContentService
+        .createTextOutput(JSON.stringify({ success: true, dup: false, hash: 지문,
+                                           fileName: fileName, fileId: file.getId() }))
+        .setMimeType(ContentService.MimeType.JSON);
+    } finally {
+      try { lock.releaseLock(); } catch (e) {}
+    }
 
   } catch (err) {
     Logger.log("❌ doPost 오류: " + err.message);
@@ -3317,6 +3487,196 @@ function 옛표시정리_(dryRun) {
     Logger.log('\n※ 이제  식자재원가_전체동기화()  를 돌리면 새 표시로 깨끗하게 들어갑니다.');
   }
 }
+
+// ════════════════════════════════════════════════════════════
+// 🧾 영수증 중복 — 같은 사진이 여러 번 들어간 것 (2026-09-30)
+//
+//  ⚠️ 자동집계_중복확인() 과 다릅니다
+//       자동집계_중복확인()  →  [자동] 표시가 붙은 줄 (발주 → 손익)
+//       영수증중복_확인()    →  영수증 사진에서 온 줄
+//
+//  왜 생겼나
+//    올라갔는데 화면에 「전송 실패」가 떠서 어머니가 같은 사진을 여러 번
+//    올리셨습니다. 앞으로는 지문(SHA-256)으로 막습니다 — doPost 참고.
+//    이 도구는 **이미 들어가 버린 것**을 찾고 정리합니다.
+// ════════════════════════════════════════════════════════════
+
+/** 같은 날·같은 분류·같은 항목·같은 금액인데 다른 파일에서 온 줄 — 읽기만 합니다 */
+function 영수증중복_확인() {
+  ['백석점', '원당점'].forEach(function (b) {
+    var 것 = 영수증중복_모으기_(b);
+    Logger.log('\n[' + b + ']  영수증 ' + 것.전체 + '줄');
+    if (!것.겹침.length) { Logger.log('  ✅ 중복 없음'); return; }
+
+    var 더잡힌돈 = 0;
+    것.겹침.forEach(function (g) { 더잡힌돈 += g.금액 * (g.줄.length - 1); });
+
+    Logger.log('  🔴 겹치는 것 ' + 것.겹침.length + '가지');
+    것.겹침.slice(0, 25).forEach(function (g) {
+      Logger.log('    ' + g.날 + ' · ' + g.분류 + ' · ' + (g.항목 || '(무명)') +
+                 ' · ' + g.금액.toLocaleString() + '원  ×' + g.줄.length);
+      g.줄.forEach(function (x) {
+        Logger.log('        ' + x.행 + '행   ' + x.파일명 + (x.첫째 ? '   ← 남길 것' : ''));
+      });
+    });
+    if (것.겹침.length > 25) Logger.log('    … 외 ' + (것.겹침.length - 25) + '가지');
+    Logger.log('  💰 더 잡힌 금액: 약 ' + 더잡힌돈.toLocaleString() + '원');
+  });
+  Logger.log('\n─ 읽기만 했습니다. 아무것도 안 고쳤습니다 ─');
+  Logger.log('※ 정리하려면  영수증중복_정리_미리보기()  부터 실행하세요.');
+}
+
+function 영수증중복_모으기_(store) {
+  var cfg = BRANCH_CONFIG[store];
+  var sh  = SpreadsheetApp.openById(cfg.ssId).getSheetByName('지출및매출로그');
+  if (!sh) return { 전체: 0, 겹침: [] };
+
+  var rows = sh.getDataRange().getValues();
+  var 묶음 = {}, 전체 = 0;
+
+  for (var i = 1; i < rows.length; i++) {
+    var 파일명 = String(rows[i][5] || '');
+    if (파일명.indexOf('[자동]') === 0) continue;      // 자동집계는 다른 도구가 봅니다
+    if (!파일명) continue;                             // 손으로 넣은 줄은 건드리지 않습니다
+    var 분류 = String(rows[i][1] || '').trim();
+    if (!분류 || /_중복$/.test(분류)) continue;        // 이미 정리된 것
+    var 금액 = Number(rows[i][3]) || 0;
+    if (!금액) continue;
+
+    var 날 = rows[i][0];
+    if (날 instanceof Date) 날 = Utilities.formatDate(날, TIMEZONE, 'yyyy-MM-dd');
+    날 = String(날).trim();
+    if (!날) continue;
+
+    전체++;
+    // ⚠️ 항목명까지 봅니다. 「날짜·분류·금액」만 보면 진짜 두 건인 것을
+    //    중복으로 잘못 볼 수 있습니다 (미락 영수증이 하루에 두 장 오는 일이 있습니다)
+    var 항목 = String(rows[i][2] || '').replace(/\s+/g, '').trim();
+    var 키 = 날 + '|' + 분류 + '|' + 항목 + '|' + 금액;
+    (묶음[키] = 묶음[키] || []).push({ 행: i + 1, 파일명: 파일명, 파일ID: String(rows[i][7] || '') });
+  }
+
+  var 겹침 = [];
+  Object.keys(묶음).forEach(function (k) {
+    var 줄 = 묶음[k];
+    if (줄.length < 2) return;
+    줄.sort(function (a, b) { return a.행 - b.행; });
+    줄[0].첫째 = true;                                  // 가장 먼저 들어간 것을 남깁니다
+    var p = k.split('|');
+    겹침.push({ 날: p[0], 분류: p[1], 항목: p[2], 금액: Number(p[3]), 줄: 줄 });
+  });
+  겹침.sort(function (a, b) { return a.날 < b.날 ? -1 : 1; });
+  return { 전체: 전체, 겹침: 겹침, 시트: sh };
+}
+
+/**
+ * 🧹 영수증 중복 정리 — ⚠️ **지우지 않습니다**
+ *    금액을 0 으로 만들고 분류에 「_중복」을 붙입니다.
+ *    손익 시트는 정해진 계정만 SUMIFS 로 읽으므로 0원 + 다른 분류면 안 잡힙니다.
+ *    줄은 그대로 남아 언제든 되돌릴 수 있습니다.
+ *
+ *    ⚠️ 가장 먼저 들어간 줄은 그대로 둡니다. 나중 것만 정리합니다.
+ */
+function 영수증중복_정리_미리보기() { 영수증중복_정리_(true); }
+function 영수증중복_정리_적용()   { 영수증중복_정리_(false); }
+
+function 영수증중복_정리_(dryRun) {
+  Logger.log(dryRun ? '── 미리보기 (아무것도 안 고칩니다) ──\n' : '── 정리합니다 ──\n');
+
+  ['백석점', '원당점'].forEach(function (b) {
+    var 것 = 영수증중복_모으기_(b);
+    if (!것.겹침.length) { Logger.log('[' + b + ']  중복 없음'); return; }
+
+    var 지울줄 = [], 금액합 = 0;
+    것.겹침.forEach(function (g) {
+      g.줄.forEach(function (x) {
+        if (x.첫째) return;
+        지울줄.push({ 행: x.행, 분류: g.분류, 날: g.날, 금액: g.금액, 항목: g.항목 });
+        금액합 += g.금액;
+      });
+    });
+
+    Logger.log('[' + b + ']  정리할 줄 ' + 지울줄.length + '개 · ' + 금액합.toLocaleString() + '원');
+    지울줄.slice(0, 15).forEach(function (t) {
+      Logger.log('   ' + t.행 + '행  ' + t.날 + ' · ' + t.분류 + ' · ' + t.금액.toLocaleString() + '원');
+    });
+    if (지울줄.length > 15) Logger.log('   … 외 ' + (지울줄.length - 15) + '줄');
+
+    if (dryRun || !지울줄.length) return;
+
+    지울줄.forEach(function (t) {
+      것.시트.getRange(t.행, 2).setValue(t.분류 + '_중복');   // B: 분류
+      것.시트.getRange(t.행, 4).setValue(0);                  // D: 금액 → 0
+    });
+    SpreadsheetApp.flush();
+    Logger.log('   ✅ ' + 지울줄.length + '줄 정리 (금액 0 · 분류에 _중복 표시)');
+  });
+
+  if (dryRun) {
+    Logger.log('\n※ 실제로 정리하려면  영수증중복_정리_적용()  을 실행하세요.');
+    Logger.log('※ 지우지 않습니다. 금액을 0 으로 만들고 분류에 _중복 을 붙입니다.');
+  } else {
+    Logger.log('\n※ 되돌리려면 분류에서 _중복 을 떼고 금액을 다시 넣으면 됩니다.');
+  }
+}
+
+/**
+ * 🔍 이미 드라이브에 있는 사진들의 지문을 뒤늦게 채웁니다 (한 번만 · 안전)
+ *
+ *   지문 차단은 오늘부터 올리는 사진에만 듭니다. 예전 사진은 지문이 없어서
+ *   같은 것을 또 올리면 막지 못합니다. 이 도구가 그걸 메웁니다.
+ *
+ *   ⚠️ 아무것도 지우거나 고치지 않습니다. 「올린사진」 탭에 적기만 합니다.
+ *   ⚠️ 사진이 많으면 한 번에 다 못 합니다. 끊기면 다시 실행하면 이어서 합니다.
+ */
+function 지문_뒤늦게채우기(store, 최대) {
+  store = store || '백석점';
+  최대  = 최대 || 200;
+  var cfg = BRANCH_CONFIG[store];
+  if (!cfg) { Logger.log('알 수 없는 지점: ' + store); return; }
+
+  var 이미 = {};
+  var sh = 사진탭가져오기_(store);
+  if (sh.getLastRow() > 1) {
+    sh.getRange(2, 3, sh.getLastRow() - 1, 1).getValues()
+      .forEach(function (r) { 이미[String(r[0]).trim()] = true; });
+  }
+
+  var files = DriveApp.getFolderById(cfg.folderId).getFiles();
+  var 넣음 = 0, 건너뜀 = 0, 시작 = Date.now();
+  var 넣을줄 = [];
+
+  while (files.hasNext() && 넣음 < 최대) {
+    if (Date.now() - 시작 > 4 * 60 * 1000) {          // ⚠️ GAS 는 6분에 끊깁니다
+      Logger.log('⏱ 시간이 다 되어 여기까지 합니다. 다시 실행하면 이어서 합니다.');
+      break;
+    }
+    var f = files.next();
+    if (이미[f.getId()]) { 건너뜀++; continue; }
+    try {
+      var h = 지문_(f.getBlob().getBytes());
+      // ⚠️ 원본지문(6열)은 비워 둡니다. 예전 사진은 원본 파일이 없어 알 수 없습니다
+      넣을줄.push([h, f.getName(), f.getId(),
+                   Utilities.formatDate(f.getDateCreated(), TIMEZONE, 'yyyy-MM-dd HH:mm:ss'),
+                   extractDocTypeFromName(f.getName()) || '', '']);
+      넣음++;
+    } catch (e) {
+      Logger.log('   건너뜀(읽기 실패): ' + f.getName() + ' — ' + e.message);
+    }
+  }
+
+  if (넣을줄.length) {
+    sh.getRange(sh.getLastRow() + 1, 1, 넣을줄.length, 사진탭머리_.length).setValues(넣을줄);
+    SpreadsheetApp.flush();
+  }
+  Logger.log('[' + store + ']  새로 적음 ' + 넣음 + '장 · 이미 있던 것 ' + 건너뜀 + '장');
+  if (files.hasNext()) Logger.log('⚠️ 아직 남았습니다. 한 번 더 실행하세요.');
+  else Logger.log('✅ 이 지점은 다 채웠습니다.');
+}
+
+function 지문_뒤늦게채우기_백석() { 지문_뒤늦게채우기('백석점', 300); }
+function 지문_뒤늦게채우기_원당() { 지문_뒤늦게채우기('원당점', 300); }
+
 
 function 식자재원가_전체동기화() {
   ['백석점', '원당점'].forEach(function (b) {
