@@ -3145,6 +3145,63 @@ function 복분자_얼마나() {
   Logger.log('※ 채우려면  식자재원가_전체동기화()  를 실행하세요 (여러 번 돌려도 안전합니다).');
 }
 
+/**
+ * 🔍 자동집계가 중복됐나 확인 — 읽기만 합니다 (안전)
+ *
+ *   2026-09-30 — 사장님: 「동기화하니까 콩나물이랑 주류가 갑자기 들어가는데 중복 아니지?」
+ *
+ *   ⚠️ upsertLogEntry 는 marker 로 같은 줄을 찾아 갱신합니다.
+ *      그런데 marker 에 **식자재발주 시트의 행 번호**가 들어갑니다.
+ *        [자동]주류원가_백석점_2026-07-19_row123
+ *      시트에서 줄을 지우거나 옮기면 행 번호가 밀려 **다른 표시**가 됩니다.
+ *      그러면 갱신이 아니라 새 줄로 들어갑니다 = 중복.
+ *
+ *   이 함수는 「같은 날 · 같은 분류 · 같은 금액」이 두 줄 이상인지 봅니다.
+ *   ⚠️ 아무것도 고치지 않습니다.
+ */
+function 자동집계_중복확인() {
+  ['백석점', '원당점'].forEach(function (b) {
+    var cfg = BRANCH_CONFIG[b];
+    if (!cfg) return;
+    var sh = SpreadsheetApp.openById(cfg.ssId).getSheetByName('지출및매출로그');
+    if (!sh) { Logger.log('[' + b + '] 로그 시트 없음'); return; }
+
+    var rows = sh.getDataRange().getValues();
+    var 묶음 = {};      // 날짜|분류|금액  →  [행번호, marker]
+    var 자동수 = 0;
+
+    for (var i = 1; i < rows.length; i++) {
+      var marker = String(rows[i][5] || '');
+      if (marker.indexOf('[자동]') !== 0) continue;    // 자동집계만 봅니다
+      자동수++;
+      var 날 = rows[i][0];
+      if (날 instanceof Date) 날 = Utilities.formatDate(날, 'Asia/Seoul', 'yyyy-MM-dd');
+      var 키 = String(날) + '|' + String(rows[i][1]) + '|' + String(rows[i][3]);
+      (묶음[키] = 묶음[키] || []).push({ 행: i + 1, marker: marker });
+    }
+
+    var 겹친것 = Object.keys(묶음).filter(function (k) { return 묶음[k].length > 1; });
+    Logger.log('\n[' + b + ']  자동집계 ' + 자동수 + '줄');
+
+    if (!겹친것.length) { Logger.log('  ✅ 중복 없음'); return; }
+
+    var 중복금액 = 0;
+    Logger.log('  🔴 겹치는 것 ' + 겹친것.length + '가지');
+    겹친것.slice(0, 20).forEach(function (k) {
+      var 것 = 묶음[k];
+      var p = k.split('|');
+      중복금액 += Number(p[2]) * (것.length - 1);
+      Logger.log('    ' + p[0] + ' · ' + p[1] + ' · ' + Number(p[2]).toLocaleString() + '원  ×' + 것.length +
+                 '   (시트 ' + 것.map(function (x) { return x.행; }).join(', ') + '행)');
+      것.forEach(function (x) { Logger.log('        ' + x.marker); });
+    });
+    if (겹친것.length > 20) Logger.log('    … 외 ' + (겹친것.length - 20) + '가지');
+    Logger.log('  💰 더 잡힌 금액: 약 ' + 중복금액.toLocaleString() + '원');
+    Logger.log('  ※ 지우려면 위 「시트 N행」 중 나중 것을 손으로 지우십시오.');
+  });
+  Logger.log('\n─ 읽기만 했습니다. 아무것도 안 고쳤습니다 ─');
+}
+
 function 식자재원가_전체동기화() {
   ['백석점', '원당점'].forEach(function (b) {
     try { syncLiquorCosts(b, null); }        // null = 기간 제한 없음
