@@ -43,6 +43,9 @@
 
 | 무엇 | 값 |
 |---|---|
+| **손익 보는 화면 (백석)** | https://seungjin0216-star.github.io/jangsoo_income-statement/Baekseok-ultimate.html |
+| 손익 보는 화면 (원당) | https://seungjin0216-star.github.io/jangsoo_income-statement/Wondang-ultimate.html |
+| | ⚠️ 사장님이 실제로 보시는 곳은 **백석** 입니다 (26-09-28 확인) |
 | 영수증앱 (백석) | https://seungjin0216-star.github.io/jangsoo_income-statement/receipt/baekseok.html |
 | 영수증앱 (원당) | https://seungjin0216-star.github.io/jangsoo_income-statement/receipt/wondang.html |
 | 저장소 | `seungjin0216-star/jangsoo_income-statement` |
