@@ -1614,7 +1614,14 @@ function out_(cb, obj) {
 //
 //  ⚠️ 못 막는 경우 — 같은 영수증을 **다시 촬영**한 것
 //     사진 파일이 아예 다르므로 기계는 구분할 수 없습니다.
-//     이건 영수증중복_확인() 으로 사후에 찾습니다.
+//     이건 사람만 알 수 있습니다. 기계로 찾으려 하지 마십시오 — 아래 참고.
+//
+//  ⚠️⚠️ 이미 들어간 중복을 기계로 찾으려 하지 마십시오 (2026-09-30 배운 것)
+//     「날짜·분류·금액이 같으면 중복」 이라는 도구를 만들었다가 지웠습니다.
+//     6~8월 것까지 정리 대상으로 잡았는데, 그 달들은 **사장님이 수기와
+//     1:1 로 이미 맞춰놓은 것**이었습니다. 적용했으면 다 틀어졌습니다.
+//     ⚠️ 가게내부카드처럼 소액은 같은 날 같은 금액이 진짜로 여러 번 있습니다.
+//     → 이미 들어간 것은 **사장님이 어긋난 달을 짚어주실 때 그 달만** 봅니다.
 //
 //  어디에 적나
 //    지점 시트의 「올린사진」 탭. 지문 · 파일명 · 파일ID · 시각 · 문서유형
@@ -3420,205 +3427,103 @@ function 발주원본_보기(날짜, 지점) {
   }
 }
 
-/**
- * 🧹 옛 표시(row 번호 붙은 것)를 정리 — 지우지 않습니다
- *
- *   2026-09-30 — marker 에서 행 번호를 뺐습니다. 그래서 옛 줄들은
- *   새 표시와 안 맞아 그대로 남습니다. 그대로 두면 이중으로 잡힙니다.
- *
- *   ⚠️ **지우지 않습니다.** 금액을 0 으로 만들고 분류에 「_중복」을 붙입니다.
- *      손익 시트는 정해진 계정만 SUMIFS 로 읽으므로 0원 + 다른 분류면 안 잡힙니다.
- *      시트에는 그대로 남아 언제든 되돌릴 수 있습니다.
- *
- *   쓰는 법
- *     옛표시정리_미리보기()   무엇이 바뀔지만 봅니다
- *     옛표시정리_적용()       실제로 정리합니다
- *
- *   ⚠️ 이걸 한 뒤에 식자재원가_전체동기화() 를 돌리면 새 표시로 깨끗하게 들어갑니다.
- */
-function 옛표시정리_미리보기() { 옛표시정리_(true); }
-function 옛표시정리_적용()   { 옛표시정리_(false); }
-
-function 옛표시정리_(dryRun) {
-  Logger.log(dryRun ? '── 미리보기 (아무것도 안 고칩니다) ──\n' : '── 정리합니다 ──\n');
-
-  ['백석점', '원당점'].forEach(function (b) {
-    var cfg = BRANCH_CONFIG[b];
-    if (!cfg) return;
-    var sh = SpreadsheetApp.openById(cfg.ssId).getSheetByName('지출및매출로그');
-    if (!sh) { Logger.log('[' + b + '] 로그 시트 없음'); return; }
-
-    var rows = sh.getDataRange().getValues();
-    var 대상 = [];
-    var 금액합 = 0;
-
-    for (var i = 1; i < rows.length; i++) {
-      var marker = String(rows[i][5] || '');
-      // 옛 표시만 — 끝에 _row숫자 가 붙은 것
-      if (marker.indexOf('[자동]') !== 0) continue;
-      if (!/_row\d+$/.test(marker)) continue;
-      var 금액 = Number(rows[i][3]) || 0;
-      대상.push({ 행: i + 1, 분류: String(rows[i][1]), 날: rows[i][0], 금액: 금액, marker: marker });
-      금액합 += 금액;
-    }
-
-    Logger.log('[' + b + ']  옛 표시 ' + 대상.length + '줄 · ' + 금액합.toLocaleString() + '원');
-    대상.slice(0, 12).forEach(function (t) {
-      var d = (t.날 instanceof Date) ? Utilities.formatDate(t.날, 'Asia/Seoul', 'yyyy-MM-dd') : String(t.날);
-      Logger.log('   ' + t.행 + '행  ' + d + ' · ' + t.분류 + ' · ' + t.금액.toLocaleString() + '원');
-    });
-    if (대상.length > 12) Logger.log('   … 외 ' + (대상.length - 12) + '줄');
-
-    if (dryRun || !대상.length) return;
-
-    대상.forEach(function (t) {
-      sh.getRange(t.행, 2).setValue(t.분류 + '_중복');    // B: 분류
-      sh.getRange(t.행, 4).setValue(0);                   // D: 금액 → 0
-      sh.getRange(t.행, 6).setValue(t.marker + '_정리됨'); // F: 표시
-    });
-    SpreadsheetApp.flush();
-    Logger.log('   ✅ ' + 대상.length + '줄 정리 (금액 0 · 분류에 _중복 표시)');
-  });
-
-  if (dryRun) {
-    Logger.log('\n※ 실제로 정리하려면  옛표시정리_적용()  을 실행하세요.');
-    Logger.log('※ 지우지 않습니다. 금액을 0 으로 만들고 표시만 바꿉니다.');
-  } else {
-    Logger.log('\n※ 이제  식자재원가_전체동기화()  를 돌리면 새 표시로 깨끗하게 들어갑니다.');
-  }
-}
-
 // ════════════════════════════════════════════════════════════
-// 🧾 영수증 중복 — 같은 사진이 여러 번 들어간 것 (2026-09-30)
+// 🔴 원당 2026-09 중복만 정리 — 사장님 지시 (2026-09-30)
 //
-//  ⚠️ 자동집계_중복확인() 과 다릅니다
-//       자동집계_중복확인()  →  [자동] 표시가 붙은 줄 (발주 → 손익)
-//       영수증중복_확인()    →  영수증 사진에서 온 줄
+//  🔴🔴 9월 **이외의 달은 절대 건드리지 않습니다** 🔴🔴
+//     사장님이 8월까지는 수기 손익과 1:1 로 이미 맞춰놓으셨습니다.
+//     그 달을 손대면 맞춰놓은 것이 틀어집니다. 되돌릴 수 없습니다.
 //
-//  왜 생겼나
-//    올라갔는데 화면에 「전송 실패」가 떠서 어머니가 같은 사진을 여러 번
-//    올리셨습니다. 앞으로는 지문(SHA-256)으로 막습니다 — doPost 참고.
-//    이 도구는 **이미 들어가 버린 것**을 찾고 정리합니다.
+//  🔴 백석점도 건드리지 않습니다
+//     백석 차액은 복분자 단가 1건뿐이고, 사장님이 무시하기로 하셨습니다.
+//
+//  무엇이 중복인가
+//     원당 9/17 주류 발주 문자가 6통 나간 사고가 있었습니다.
+//     그때 식자재발주 시트에도 6줄이 쌓였고, 자동집계가 그걸 그대로 6줄 잡았습니다.
+//     같은 날·같은 분류·같은 금액이 여러 줄이면 **가장 먼저 들어간 한 줄만 남깁니다.**
+//
+//  ⚠️ 지우지 않습니다. 금액을 0 으로 만들고 분류에 「_중복」을 붙입니다.
+//     손익 시트는 정해진 계정만 SUMIFS 로 읽으므로 0원 + 다른 분류면 안 잡힙니다.
+//     줄은 그대로 남아 언제든 되돌릴 수 있습니다.
+//     ⚠️ 행을 지우면 중간에 끊겼을 때 무엇이 사라졌는지 알 방법이 없습니다.
+//
+//  쓰는 법
+//     원당9월중복_미리보기()   무엇이 바뀔지만 봅니다
+//     원당9월중복_적용()       실제로 정리합니다
+//
+//  ⚠️ 정리 뒤에 식자재원가_전체동기화() 를 **돌리지 마십시오.**
+//     원본(식자재발주 시트)에 6줄이 그대로 있어 또 6줄이 들어옵니다.
 // ════════════════════════════════════════════════════════════
 
-/** 같은 날·같은 분류·같은 항목·같은 금액인데 다른 파일에서 온 줄 — 읽기만 합니다 */
-function 영수증중복_확인() {
-  ['백석점', '원당점'].forEach(function (b) {
-    var 것 = 영수증중복_모으기_(b);
-    Logger.log('\n[' + b + ']  영수증 ' + 것.전체 + '줄');
-    if (!것.겹침.length) { Logger.log('  ✅ 중복 없음'); return; }
+function 원당9월중복_미리보기() { 원당9월중복_(true); }
+function 원당9월중복_적용()   { 원당9월중복_(false); }
 
-    var 더잡힌돈 = 0;
-    것.겹침.forEach(function (g) { 더잡힌돈 += g.금액 * (g.줄.length - 1); });
+function 원당9월중복_(dryRun) {
+  var 지점 = '원당점', 달 = '2026-09';
+  Logger.log(dryRun ? '── 미리보기 (아무것도 안 고칩니다) ──' : '── 정리합니다 ──');
+  Logger.log('   대상: ' + 지점 + ' · ' + 달 + ' 만\n');
 
-    Logger.log('  🔴 겹치는 것 ' + 것.겹침.length + '가지');
-    것.겹침.slice(0, 25).forEach(function (g) {
-      Logger.log('    ' + g.날 + ' · ' + g.분류 + ' · ' + (g.항목 || '(무명)') +
-                 ' · ' + g.금액.toLocaleString() + '원  ×' + g.줄.length);
-      g.줄.forEach(function (x) {
-        Logger.log('        ' + x.행 + '행   ' + x.파일명 + (x.첫째 ? '   ← 남길 것' : ''));
-      });
-    });
-    if (것.겹침.length > 25) Logger.log('    … 외 ' + (것.겹침.length - 25) + '가지');
-    Logger.log('  💰 더 잡힌 금액: 약 ' + 더잡힌돈.toLocaleString() + '원');
-  });
-  Logger.log('\n─ 읽기만 했습니다. 아무것도 안 고쳤습니다 ─');
-  Logger.log('※ 정리하려면  영수증중복_정리_미리보기()  부터 실행하세요.');
-}
-
-function 영수증중복_모으기_(store) {
-  var cfg = BRANCH_CONFIG[store];
-  var sh  = SpreadsheetApp.openById(cfg.ssId).getSheetByName('지출및매출로그');
-  if (!sh) return { 전체: 0, 겹침: [] };
+  var sh = SpreadsheetApp.openById(BRANCH_CONFIG[지점].ssId).getSheetByName('지출및매출로그');
+  if (!sh) { Logger.log('로그 시트 없음'); return; }
 
   var rows = sh.getDataRange().getValues();
-  var 묶음 = {}, 전체 = 0;
+  var 묶음 = {}, 본줄 = 0;
 
   for (var i = 1; i < rows.length; i++) {
-    var 파일명 = String(rows[i][5] || '');
-    if (파일명.indexOf('[자동]') === 0) continue;      // 자동집계는 다른 도구가 봅니다
-    if (!파일명) continue;                             // 손으로 넣은 줄은 건드리지 않습니다
-    var 분류 = String(rows[i][1] || '').trim();
-    if (!분류 || /_중복$/.test(분류)) continue;        // 이미 정리된 것
-    var 금액 = Number(rows[i][3]) || 0;
-    if (!금액) continue;
-
     var 날 = rows[i][0];
     if (날 instanceof Date) 날 = Utilities.formatDate(날, TIMEZONE, 'yyyy-MM-dd');
     날 = String(날).trim();
-    if (!날) continue;
 
-    전체++;
-    // ⚠️ 항목명까지 봅니다. 「날짜·분류·금액」만 보면 진짜 두 건인 것을
-    //    중복으로 잘못 볼 수 있습니다 (미락 영수증이 하루에 두 장 오는 일이 있습니다)
-    var 항목 = String(rows[i][2] || '').replace(/\s+/g, '').trim();
-    var 키 = 날 + '|' + 분류 + '|' + 항목 + '|' + 금액;
-    (묶음[키] = 묶음[키] || []).push({ 행: i + 1, 파일명: 파일명, 파일ID: String(rows[i][7] || '') });
+    // 🔴 여기가 안전장치입니다. 9월이 아니면 아예 보지 않습니다
+    if (날.indexOf(달) !== 0) continue;
+
+    var 분류 = String(rows[i][1] || '').trim();
+    if (!분류 || /_중복$/.test(분류)) continue;       // 이미 정리된 것
+    var 금액 = Number(rows[i][3]) || 0;
+    if (!금액) continue;
+
+    본줄++;
+    var 키 = 날 + '|' + 분류 + '|' + 금액;
+    (묶음[키] = 묶음[키] || []).push({ 행: i + 1, 표시: String(rows[i][5] || '') });
   }
 
-  var 겹침 = [];
-  Object.keys(묶음).forEach(function (k) {
+  Logger.log('[' + 지점 + ' ' + 달 + ']  모두 ' + 본줄 + '줄');
+
+  var 정리할것 = [], 금액합 = 0;
+  Object.keys(묶음).sort().forEach(function (k) {
     var 줄 = 묶음[k];
     if (줄.length < 2) return;
     줄.sort(function (a, b) { return a.행 - b.행; });
-    줄[0].첫째 = true;                                  // 가장 먼저 들어간 것을 남깁니다
     var p = k.split('|');
-    겹침.push({ 날: p[0], 분류: p[1], 항목: p[2], 금액: Number(p[3]), 줄: 줄 });
+    Logger.log('  🔴 ' + p[0] + ' · ' + p[1] + ' · ' + Number(p[2]).toLocaleString() + '원  ×' + 줄.length);
+    줄.forEach(function (x, n) {
+      Logger.log('       ' + x.행 + '행' + (n === 0 ? '   ← 이것만 남깁니다' : '   → 0원으로'));
+      if (n === 0) return;
+      정리할것.push({ 행: x.행, 분류: p[1], 금액: Number(p[2]) });
+      금액합 += Number(p[2]);
+    });
   });
-  겹침.sort(function (a, b) { return a.날 < b.날 ? -1 : 1; });
-  return { 전체: 전체, 겹침: 겹침, 시트: sh };
-}
 
-/**
- * 🧹 영수증 중복 정리 — ⚠️ **지우지 않습니다**
- *    금액을 0 으로 만들고 분류에 「_중복」을 붙입니다.
- *    손익 시트는 정해진 계정만 SUMIFS 로 읽으므로 0원 + 다른 분류면 안 잡힙니다.
- *    줄은 그대로 남아 언제든 되돌릴 수 있습니다.
- *
- *    ⚠️ 가장 먼저 들어간 줄은 그대로 둡니다. 나중 것만 정리합니다.
- */
-function 영수증중복_정리_미리보기() { 영수증중복_정리_(true); }
-function 영수증중복_정리_적용()   { 영수증중복_정리_(false); }
+  if (!정리할것.length) { Logger.log('\n  ✅ 중복 없음. 아무것도 할 일이 없습니다'); return; }
 
-function 영수증중복_정리_(dryRun) {
-  Logger.log(dryRun ? '── 미리보기 (아무것도 안 고칩니다) ──\n' : '── 정리합니다 ──\n');
-
-  ['백석점', '원당점'].forEach(function (b) {
-    var 것 = 영수증중복_모으기_(b);
-    if (!것.겹침.length) { Logger.log('[' + b + ']  중복 없음'); return; }
-
-    var 지울줄 = [], 금액합 = 0;
-    것.겹침.forEach(function (g) {
-      g.줄.forEach(function (x) {
-        if (x.첫째) return;
-        지울줄.push({ 행: x.행, 분류: g.분류, 날: g.날, 금액: g.금액, 항목: g.항목 });
-        금액합 += g.금액;
-      });
-    });
-
-    Logger.log('[' + b + ']  정리할 줄 ' + 지울줄.length + '개 · ' + 금액합.toLocaleString() + '원');
-    지울줄.slice(0, 15).forEach(function (t) {
-      Logger.log('   ' + t.행 + '행  ' + t.날 + ' · ' + t.분류 + ' · ' + t.금액.toLocaleString() + '원');
-    });
-    if (지울줄.length > 15) Logger.log('   … 외 ' + (지울줄.length - 15) + '줄');
-
-    if (dryRun || !지울줄.length) return;
-
-    지울줄.forEach(function (t) {
-      것.시트.getRange(t.행, 2).setValue(t.분류 + '_중복');   // B: 분류
-      것.시트.getRange(t.행, 4).setValue(0);                  // D: 금액 → 0
-    });
-    SpreadsheetApp.flush();
-    Logger.log('   ✅ ' + 지울줄.length + '줄 정리 (금액 0 · 분류에 _중복 표시)');
-  });
+  Logger.log('\n  정리할 줄 ' + 정리할것.length + '개 · ' + 금액합.toLocaleString() + '원 줄어듭니다');
 
   if (dryRun) {
-    Logger.log('\n※ 실제로 정리하려면  영수증중복_정리_적용()  을 실행하세요.');
+    Logger.log('\n※ 실제로 정리하려면  원당9월중복_적용()  을 실행하세요.');
     Logger.log('※ 지우지 않습니다. 금액을 0 으로 만들고 분류에 _중복 을 붙입니다.');
-  } else {
-    Logger.log('\n※ 되돌리려면 분류에서 _중복 을 떼고 금액을 다시 넣으면 됩니다.');
+    return;
   }
+
+  정리할것.forEach(function (t) {
+    sh.getRange(t.행, 2).setValue(t.분류 + '_중복');    // B: 분류
+    sh.getRange(t.행, 4).setValue(0);                   // D: 금액 → 0
+  });
+  SpreadsheetApp.flush();
+  Logger.log('\n  ✅ ' + 정리할것.length + '줄 정리 완료');
+  Logger.log('※ 되돌리려면 분류에서 _중복 을 떼고 금액을 다시 넣으면 됩니다.');
+  Logger.log('⚠️ 식자재원가_전체동기화() 는 돌리지 마십시오. 또 들어옵니다.');
 }
+
 
 /**
  * 🔍 이미 드라이브에 있는 사진들의 지문을 뒤늦게 채웁니다 (한 번만 · 안전)
