@@ -3092,6 +3092,59 @@ var MEAT_PRICES = {
  *      같은 표시([자동]분류_지점_날짜_row번호)를 찾아 갱신합니다.
  *   ⚠️ 6분 제한이 있습니다. 끊기면 한 번 더 돌리세요.
  */
+/**
+ * 🍶 복분자가 지금까지 얼마나 나갔나 — 읽기만 합니다 (안전)
+ *
+ *   2026-09-30 — 복분자 단가를 14,900원으로 넣었습니다.
+ *   그동안 0원으로 잡혀 있던 것이 얼마인지 먼저 봅니다.
+ *
+ *   ⚠️ 아무것도 고치지 않습니다. 화면에 찍기만 합니다.
+ *      이걸 보고 나서 식자재원가_전체동기화() 를 돌리면 됩니다.
+ */
+function 복분자_얼마나() {
+  var 단가 = LIQUOR_PRICES['복분자'] || 0;
+  Logger.log('복분자 단가: ' + 단가.toLocaleString() + '원\n');
+
+  var sheet = SpreadsheetApp.openById(STOCK_SS_ID).getSheetByName('식자재발주');
+  if (!sheet) { Logger.log('식자재발주 시트 없음'); return; }
+
+  var rows = sheet.getDataRange().getValues();
+  var 지점별 = {};
+  var 전체수량 = 0;
+
+  for (var i = 1; i < rows.length; i++) {
+    var 날짜 = rows[i][0];
+    var 지점 = String(rows[i][1] || '').trim();
+    var 업체 = String(rows[i][2] || '').trim();
+    var 본문 = String(rows[i][3] || '');
+    if (업체 !== '주류') continue;
+
+    // "복분자 2" 처럼 이름 뒤에 수량이 붙습니다. 수량이 없으면 1개입니다.
+    var m = 본문.match(/복분자\s*(\d+)?/);
+    if (!m) continue;
+    var 수량 = m[1] ? parseInt(m[1], 10) : 1;
+
+    if (!지점별[지점]) 지점별[지점] = { 건수: 0, 수량: 0, 첫날: null, 끝날: null };
+    var g = 지점별[지점];
+    g.건수++; g.수량 += 수량;
+    var d = (날짜 instanceof Date) ? Utilities.formatDate(날짜, 'Asia/Seoul', 'yyyy-MM-dd') : String(날짜);
+    if (!g.첫날 || d < g.첫날) g.첫날 = d;
+    if (!g.끝날 || d > g.끝날) g.끝날 = d;
+    전체수량 += 수량;
+  }
+
+  Object.keys(지점별).forEach(function (b) {
+    var g = 지점별[b];
+    Logger.log('[' + b + ']  ' + g.건수 + '번 발주 · ' + g.수량 + '개 · ' +
+               (g.수량 * 단가).toLocaleString() + '원   (' + g.첫날 + ' ~ ' + g.끝날 + ')');
+  });
+
+  if (!전체수량) { Logger.log('복분자 발주 기록이 없습니다.'); return; }
+  Logger.log('\n합계 ' + 전체수량 + '개 · ' + (전체수량 * 단가).toLocaleString() + '원');
+  Logger.log('\n※ 그동안 0원으로 잡혀 있던 금액입니다.');
+  Logger.log('※ 채우려면  식자재원가_전체동기화()  를 실행하세요 (여러 번 돌려도 안전합니다).');
+}
+
 function 식자재원가_전체동기화() {
   ['백석점', '원당점'].forEach(function (b) {
     try { syncLiquorCosts(b, null); }        // null = 기간 제한 없음
