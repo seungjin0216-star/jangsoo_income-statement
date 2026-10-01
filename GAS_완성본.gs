@@ -2211,6 +2211,20 @@ function dailyProcess() {
     // 알바 데이터 스냅샷 — 알바 시트 A1 이 날아가도 되돌릴 수 있게
     알바데이터_백업();
 
+    // 🔴 지난달 인건비 늦은 반영 (2026-10-02 · 사장님 「한 3일까지만 해서 지난달 인건비 가져오게끔」)
+    //    전에는 1일 04:00 monthlySetup 한 번뿐이라, 그 뒤에 「지급완료」를 누르면 그 달 알바 인건비가 영원히 0원
+    //    (9월이 그랬습니다 — 지급완료 10/1 12:09 · 23:18)
+    //    → 매달 1~3일 새벽 2시마다 지난달 것을 다시 가져옵니다. 같은 표시로 갱신(upsert)이라 두 번 잡히지 않습니다
+    //    ⚠️ 4일 이후에 지급완료한 것은 여전히 손으로: syncLaborCosts('백석점','YYYY-MM')
+    if (new Date().getDate() <= 3) {
+      var 지난달 = new Date(); 지난달.setDate(1); 지난달.setMonth(지난달.getMonth() - 1);
+      var 지난달ym = Utilities.formatDate(지난달, TIMEZONE, 'yyyy-MM');
+      syncLaborCosts('백석점', 지난달ym);
+      syncLaborCosts('원당점', 지난달ym);
+      staffSyncAll_(지난달ym);
+      Logger.log('지난달 인건비 다시 가져옴: ' + 지난달ym);
+    }
+
     // 처리 결과 점검 — 전부 실패했으면 메일로 알린다
     //
     //   2026-08-19: Gemini API 키가 무효가 되어 영수증이 하나도 안 들어가고
