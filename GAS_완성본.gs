@@ -3746,8 +3746,15 @@ function syncMeatCosts(branchName, months) {
     var dc        = Number(row[3]) || 0;           // D: 대창
     var mc        = Number(row[4]) || 0;           // E: 막창
     var extrasStr = String(row[6] || '').trim();   // G: "천엽, 간(반)"
+    var 상태      = String(row[7] || '').trim();   // H: 「대체됨」 이면 고쳐 보내서 밀려난 줄
 
     if (branch !== branchName || !dateStr) continue;
+
+    // ⚠️ 2026-10-01 — 입고 정정 (사장님 결정 「가 방식」)
+    //    같은 날 입고를 고쳐 다시 보내면 발주 GAS 가 앞 줄 H열에 「대체됨」을 적습니다.
+    //    전에는 같은 날 줄을 전부 더해서 **고기값이 두 배**가 됐습니다.
+    //    ⚠️ 발주 GAS(백석 handleStock)와 짝입니다. 한쪽만 고치면 다시 두 배가 됩니다
+    if (상태 === '대체됨') continue;
 
     var parsed = parseMeatDateStr(dateStr);
     if (!parsed) { Logger.log('날짜 파싱 실패: ' + dateStr); continue; }
