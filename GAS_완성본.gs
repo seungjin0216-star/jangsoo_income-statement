@@ -8308,3 +8308,33 @@ function 매출계정정리_(dryRun) {
   Logger.log('\n  ✅ ' + 지울것.length + '줄 · ' + 합계.toLocaleString() + '원을 지웠습니다.');
   Logger.log('  다음: 날짜진단() 으로 매출이 그대로인지 꼭 확인하세요.');
 }
+
+// ════════════════════════════════════════════════════════════
+// 🧹 가게카드 중복 정리 (2026-10-02)
+//   매장앱 「금액만 적기」가 느려 여러 번 눌려 같은 줄이 여러 개 들어감
+//     2026-08-27  가게카드  3,224,616  × 3
+//     2026-09-28  가게카드  2,975,074  × 2
+//   ⚠️ 지우지 않습니다. 첫 줄만 두고 나머지 분류를 「가게카드_중복」으로 → 월 시트 합계에서 빠짐
+//   ⚠️ 범위를 못 박았습니다: 백석점 · 이 날짜 · 이 금액 · 분류 가게카드 만
+// ════════════════════════════════════════════════════════════
+function 가게카드중복_1002_미리보기() { 가게카드중복_1002_(true); }
+function 가게카드중복_1002_적용()     { 가게카드중복_1002_(false); }
+function 가게카드중복_1002_(dryRun) {
+  var 대상 = [['2026-08-27', 3224616], ['2026-09-28', 2975074]];
+  var sh = SpreadsheetApp.openById(BRANCH_CONFIG['백석점'].ssId).getSheetByName('지출및매출로그');
+  var v = sh.getDataRange().getValues();
+  대상.forEach(function (t) {
+    var 본 = 0, 바꿈 = 0;
+    for (var i = 1; i < v.length; i++) {
+      var d = v[i][0] instanceof Date ? Utilities.formatDate(v[i][0], TIMEZONE, 'yyyy-MM-dd') : String(v[i][0]).trim();
+      var 금액 = Number(String(v[i][3]).replace(/[^0-9.-]/g, '')) || 0;
+      if (d !== t[0] || String(v[i][1]).trim() !== '가게카드' || 금액 !== t[1] || String(v[i][4]).trim() !== '백석점') continue;
+      본++;
+      if (본 === 1) { Logger.log(t[0] + ' ' + t[1] + '  ' + (i + 1) + '행 → 남김'); continue; }
+      바꿈++;
+      if (!dryRun) sh.getRange(i + 1, 2).setValue('가게카드_중복');
+      Logger.log(t[0] + ' ' + t[1] + '  ' + (i + 1) + '행 → ' + (dryRun ? '「가게카드_중복」으로 바꿀 것' : '「가게카드_중복」으로 바꿈'));
+    }
+    Logger.log((dryRun ? '[미리보기] ' : '[적용] ') + t[0] + ' 같은 줄 ' + 본 + '개 중 ' + 바꿈 + '개');
+  });
+}
