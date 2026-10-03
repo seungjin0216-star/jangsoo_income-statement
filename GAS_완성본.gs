@@ -1867,12 +1867,12 @@ var PROMPTS = {
   관리비:
     "이것은 건물 관리비 영수증 또는 청구서입니다.\n" +
     "청구 날짜(YYYY-MM-DD)와 청구 금액 합계를 추출하여 순수 JSON 배열만 응답하세요:\n" +
-    "[{\"날짜\":\"YYYY-MM-DD\",\"분류\":\"매장관리비(전기,수도)\",\"항목명\":\"관리비\",\"금액\":숫자}]",
+    "[{\"날짜\":\"YYYY-MM-DD\",\"분류\":\"매장관리비\",\"항목명\":\"관리비\",\"금액\":숫자}]",
 
   가스:
     "이것은 가스 요금 영수증 또는 청구서입니다.\n" +
     "청구 날짜(YYYY-MM-DD)와 총 납부 금액을 추출하여 순수 JSON 배열만 응답하세요:\n" +
-    "[{\"날짜\":\"YYYY-MM-DD\",\"분류\":\"가스사용료(매장)\",\"항목명\":\"가스요금\",\"금액\":숫자}]",
+    "[{\"날짜\":\"YYYY-MM-DD\",\"분류\":\"가스사용료\",\"항목명\":\"가스요금\",\"금액\":숫자}]",
 
   카드값:
     "이것은 가게 카드 결제 영수증 또는 카드 사용 내역 캡처 화면입니다 (마트·쿠팡·네이버 등 구매).\n" +
@@ -2119,6 +2119,8 @@ function recordDataSafely(sheet, items, branchName, fileName, fileId, docType) {
   var 중복 = 0;
 
   items.forEach(function(item) {
+    // 🔴 26-10-03 사장님: 「매장관리비 · 가스사용료 계정 이름 그대로」 — 괄호가 붙으면 시트 SUMIFS 가 못 잡음 (조용한 실패)
+    if (item && 분류바꾸기_[String(item.분류 || '').trim()]) item.분류 = 분류바꾸기_[String(item.분류).trim()];
     var amount = parseInt(String(item.금액 || "0").replace(/[^0-9]/g, "")) || 0;
     if (amount === 0) return;
 
@@ -2866,6 +2868,7 @@ function 관리비분리_(dryRun) {
 function 직접입력_(data) {
   var store  = data.store || '백석점';
   var cat    = String(data.분류 || data.category || '').trim();
+  if (분류바꾸기_[cat]) cat = 분류바꾸기_[cat];   // 옛 이름이 와도 시트 계정 이름으로 (26-10-03)
   var amount = parseInt(String(data.금액 || data.amount || '0').replace(/[^0-9]/g, ''), 10) || 0;
   var memo   = String(data.항목명 || data.memo || '').trim();
   var ymd    = String(data.날짜 || data.date || '').trim();
@@ -8337,4 +8340,83 @@ function 가게카드중복_1002_(dryRun) {
     }
     Logger.log((dryRun ? '[미리보기] ' : '[적용] ') + t[0] + ' 같은 줄 ' + 본 + '개 중 ' + 바꿈 + '개');
   });
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  🧾 세금예수금_백석 — 4대보험 예수금 새 줄 · 종합소득세 예수금 고정  (2026-10-03)
+//
+//  사장님 지시 (26-10-03)
+//    「4대보험 추가 = 세금예수금에 미리 빼버리기 (간단하게 100만원으로 매달 계상)」
+//    「종소세 예수금 = 매년 종소세 예상 250만원 월할 계산 · 현재의 산식 대신 250 고정으로 픽스,
+//      단 고정비는 아님 · 계정은 똑같이 세금 예수금 하단에」
+//    「1월부터 다시 다 적용해줘」 · 「4대보험 고지서 영수증으로 안 올릴 거야」
+//
+//  하는 일 (탭마다 · 이름으로 행을 찾음 — 행 번호를 믿지 않음)
+//    ① 종합소득세 예수금   C = ROUND(2500000/12)  = 208,333원      (옛 수식 =현금매출×비율 은 거의 0원이었음)
+//    ② 4대보험 예수금      없으면 종합소득세 예수금 바로 아래에 새 줄 · C = 1,000,000원
+//    ③ 세금 예수금(합계)   = SUM(부가세 예수금 ~ 4대보험 예수금)  — 새 줄이 합계에서 빠지지 않게
+//
+//  범위 (못 박음 · CLAUDE.md ⑤)  백석점 · 「26년 x월 손익계산서」 템플릿 + 26년 1~12월 탭
+//  ⚠️ 줄을 하나 끼워 넣으면 아래 줄들이 한 칸씩 내려갑니다. 시트 수식은 저절로 따라옵니다.
+//     이 프로젝트 안에서 그 아래 행 번호를 박아 쓰는 코드는 없음 (26-10-03 확인 · 진단용 읽기만 있음)
+//  ⚠️ 원당은 안 건드립니다.
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+var 예수금_4대보험_ = 1000000;
+var 예수금_종소세연_ = 2500000;
+
+function 세금예수금_백석_미리보기() { 세금예수금_백석_(true);  }
+function 세금예수금_백석_적용()     { 세금예수금_백석_(false); }
+
+function 세금예수금_백석_(dryRun) {
+  var ss = SpreadsheetApp.openById(BRANCH_CONFIG['백석점'].ssId);
+  var 탭들 = ['26년 x월 손익계산서'];
+  for (var m = 1; m <= 12; m++) 탭들.push('26년 ' + m + '월 손익계산서');
+  var 종소세수식 = '=ROUND(' + 예수금_종소세연_ + '/12,0)';
+  var 월종소세 = Math.round(예수금_종소세연_ / 12);
+  var 바뀐탭 = 0, 문제 = [];
+
+  Logger.log('\n ════════ 백석 세금 예수금 — ' + (dryRun ? '미리보기 (아무것도 안 바꿈)' : '적용') + ' ════════');
+  Logger.log('  종합소득세 예수금 → 매달 ' + 월종소세.toLocaleString() + '원 (연 ' + 예수금_종소세연_.toLocaleString() + ' ÷ 12)');
+  Logger.log('  4대보험 예수금   → 매달 ' + 예수금_4대보험_.toLocaleString() + '원 (새 줄)\n');
+
+  탭들.forEach(function (tabName) {
+    var sh = ss.getSheetByName(tabName);
+    if (!sh) return;
+    var last = Math.min(sh.getLastRow(), 90);
+    var b = sh.getRange(1, 2, last, 1).getValues();
+    var 행 = function (이름) { var t = 이름.replace(/\s+/g, ''); for (var i = 0; i < last; i++) if (String(b[i][0] || '').replace(/\s+/g, '') === t) return i + 1; return -1; };
+    var 합계행 = 행('세금 예수금'), 부가행 = 행('부가세 예수금'), 종소행 = 행('종합소득세 예수금'), 사대행 = 행('4대보험 예수금'), 순이익행 = 행('매출 순 이익');
+    var 이름 = tabName.replace('26년 ', '').replace(' 손익계산서', '');
+    if (합계행 < 0 || 부가행 < 0 || 종소행 < 0) { 문제.push(이름 + ' — 세금 예수금 줄을 못 찾음 (합계 ' + 합계행 + ' · 부가세 ' + 부가행 + ' · 종소세 ' + 종소행 + ')'); return; }
+    if (!(합계행 < 부가행 && 부가행 < 종소행)) { 문제.push(이름 + ' — 줄 순서가 예상과 다름 (합계 ' + 합계행 + ' · 부가세 ' + 부가행 + ' · 종소세 ' + 종소행 + ')'); return; }
+
+    var 전합계 = sh.getRange(합계행, 3).getDisplayValue(), 전순이익 = 순이익행 > 0 ? sh.getRange(순이익행, 3).getDisplayValue() : '?';
+    var 전종소수식 = sh.getRange(종소행, 3).getFormula() || ('(값) ' + sh.getRange(종소행, 3).getDisplayValue());
+    var 전합계수식 = sh.getRange(합계행, 3).getFormula() || '(값)';
+    Logger.log('  · ' + 이름 + '   합계 ' + 합계행 + '행 · 부가세 ' + 부가행 + ' · 종소세 ' + 종소행 + ' · 4대보험 ' + (사대행 > 0 ? 사대행 + '행 (이미 있음)' : '없음 → ' + (종소행 + 1) + '행에 새로'));
+    Logger.log('      종소세 수식  ' + 전종소수식 + '  →  ' + 종소세수식);
+    Logger.log('      합계 수식    ' + 전합계수식 + '  →  =SUM(C' + 부가행 + ':C' + (사대행 > 0 ? 사대행 : 종소행 + 1) + ')');
+    Logger.log('      지금 세금 예수금 ' + 전합계 + ' · 매출 순 이익 ' + 전순이익);
+
+    if (dryRun) { 바뀐탭++; return; }
+    if (사대행 < 0) {
+      sh.insertRowAfter(종소행);
+      사대행 = 종소행 + 1;
+      sh.getRange(종소행, 1, 1, sh.getLastColumn()).copyTo(sh.getRange(사대행, 1, 1, sh.getLastColumn()), { formatOnly: true });
+      sh.getRange(사대행, 2).setValue('4대보험 예수금');
+    }
+    sh.getRange(사대행, 3).setValue(예수금_4대보험_);
+    sh.getRange(종소행, 3).setFormula(종소세수식);
+    sh.getRange(합계행, 3).setFormula('=SUM(C' + 부가행 + ':C' + 사대행 + ')');
+    SpreadsheetApp.flush();
+    Logger.log('      ✅ 바꾼 뒤 세금 예수금 ' + sh.getRange(합계행, 3).getDisplayValue());
+    바뀐탭++;
+  });
+
+  Logger.log('\n  ──────────────────────────────');
+  Logger.log('  ' + (dryRun ? '바꿀' : '바꾼') + ' 탭 ' + 바뀐탭 + '개');
+  문제.forEach(function (x) { Logger.log('  ⚠️ ' + x); });
+  if (dryRun) Logger.log('\n  ※ 미리보기입니다. 맞으면 세금예수금_백석_적용() 을 실행하세요.');
+  else Logger.log('\n  ✅ 끝. 세금 예수금이 늘어난 만큼 「매출 순 이익」이 줄어듭니다. 정상입니다.\n  ⚠️ 다시 돌려도 안전합니다 (4대보험 줄은 한 번만 생김)');
 }
