@@ -484,7 +484,7 @@
         operatingProfit: getV('영업이익'),
         taxReserve: {
           total: getV('세금예수금'),
-          items: { '부가세 예수금': getV('부가세예수금') || getV('부가세'), '종합소득세 예수금': getV('종합소득세예수금') || getV('종소세') }
+          items: { '부가세 예수금': getV('부가세예수금') || getV('부가세'), '종합소득세 예수금': getV('종합소득세예수금') || getV('종소세'), '4대보험 예수금': getV('4대보험예수금') }
         },
         netProfit: getV('매출순이익') || getV('순이익'),
         lastUpdatedDay: latestDay
@@ -666,7 +666,7 @@
           items: [{ label: '카드수수료', value: d.variableCost.items['카드수수료'] }, { label: '매장관리비', value: d.variableCost.items['매장관리비'] }, { label: '가스사용료', value: d.variableCost.items['가스사용료'] }, { label: '네이버광고', value: d.variableCost.items['네이버광고'] }, { label: '기타잡비용', value: d.variableCost.items['기타잡비용'] }] },
         { icon: ICONS.operating, label: '영업이익', value: d.operatingProfit, positive: true },
         { icon: ICONS.tax, label: '세금예수금', value: d.taxReserve.total, negative: true,
-          items: [{ label: '부가세', value: d.taxReserve.items['부가세 예수금'] }, { label: '종소세', value: d.taxReserve.items['종합소득세 예수금'] }] },
+          items: [{ label: '부가세', value: d.taxReserve.items['부가세 예수금'] }, { label: '종소세 (연 250만 ÷ 12)', value: d.taxReserve.items['종합소득세 예수금'] }, { label: '4대보험 (매달 100만)', value: d.taxReserve.items['4대보험 예수금'] }] },
         { icon: ICONS.net, label: '매출 순이익', value: d.netProfit, positive: true }
       ];
 
