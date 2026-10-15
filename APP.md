@@ -83,7 +83,8 @@
 | | ⚠️ 원당 영수증앱도 **같은 GAS** 로 보냅니다. 지점은 요청 안에 담깁니다 |
 | GAS URL 적힌 곳 | `receipt/baekseok.html` 149행 · `receipt/wondang.html` 158행 |
 | 알바계산기 GAS | `AKfycbxGpa_` — `GAS_완성본.gs` 3415행 `ALBA_SCRIPT_URL` |
-| 코드 파일 | `GAS_완성본.gs` (6천 줄+) · `GAS_자동화_추가코드.gs` · `진단_*.gs` |
+| 코드 파일 | `GAS_완성본.gs` (= GAS 의 Code) · `진단_확인요망.gs` (= GAS 의 **진단** · 살아 있음 · 이름과 달리 지금 쓰는 코드) |
+| 폐기 (26-10-15) | `GAS_자동화_추가코드.gs` (7월 · GAS 에 없음 · 전화번호 들어 있었음) · `진단_복구_붙여넣기.gs` (완성본에 다 있음) · `*가상본` · `Wondang-ultimate.html.txt`·`.txt` → `~/웹앱프로젝트_폐기/2026-10-15/` |
 | 시트 | 「백석점 손익계산서」 · 「원당점 손익계산서」 (별도 파일) |
 | 죽은 GAS | `AKfycbxvvTbp_` (원당점 시트 GAS) — 이제 안 씀 |
 | GAS 편집기 | `script.google.com/home/projects/1iJFX7TY…/edit` (전체 번호는 `.clasp.json` · 저장소에 안 올림) |
