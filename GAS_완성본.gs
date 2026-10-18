@@ -3697,11 +3697,15 @@ function upsertLogEntry(logSheet, ymd, category, itemName, amount, branch, marke
   var lastRow = logSheet.getLastRow();
 
   // 기존 항목 검색 (F열 = 원본파일명 = marker)
+  // ⚡ 26-10-18 금액이 같으면 다시 쓰지 않습니다 (사장님 「매번 저렇게 되어야 해? 엄청 많이 하는데」)
+  //    전에는 8월부터 모든 날을 매번 다시 써서(한 줄 1초 · flush) 백석만 3분 넘게 → 6분 제한에 끊겨
+  //    원당 동기화 · 알바 백업 · 실패 점검이 안 돌았습니다. 금액·계산은 그대로, 같은 값 다시 쓰기만 뺌
   if (lastRow > 1) {
-    var fCol = logSheet.getRange(2, 6, lastRow - 1, 1).getValues();
+    var fCol = logSheet.getRange(2, 4, lastRow - 1, 3).getValues();   // D 금액 · E · F marker
     for (var i = 0; i < fCol.length; i++) {
-      if (String(fCol[i][0]).trim() === marker) {
+      if (String(fCol[i][2]).trim() === marker) {
         var rowNum = i + 2;
+        if (Number(fCol[i][0]) === Number(amount)) return true;   // 같은 금액 — 그대로 둠
         logSheet.getRange(rowNum, 4).setValue(amount);   // D: 금액 갱신
         logSheet.getRange(rowNum, 7).setValue(nowStr);   // G: 처리시각 갱신
         Logger.log('🔄 업데이트 [' + category + '] ' + ymd + ' → ' + amount.toLocaleString() + '원');
