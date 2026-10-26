@@ -2202,6 +2202,9 @@ function dailyProcess() {
     if (!lock.tryLock(300000)) { Logger.log("⚠️ 다른 프로세스 실행 중"); return; }
     Logger.log("=== 자동 처리 시작 ===");
     _RUN_STAT = { 성공: 0, 오류: 0, 거름: 0 };
+    // 🧾 26-10-26 원당 고정비 합계 고치기 — 사장님 「계상이 안 되었다면 바로 실행해 줘」 → 새벽에 한 번만 (속성 표시로 다시 안 돎)
+    try { var P_ = PropertiesService.getScriptProperties(); if (!P_.getProperty('고정비_원당_261026')) { 고정비_원당_(false); P_.setProperty('고정비_원당_261026', new Date().toISOString()); } }
+    catch (e) { Logger.log('고정비_원당 못 함: ' + e.message); }
     processFiles("원당점");
     processFiles("백석점");
 
@@ -8428,4 +8431,48 @@ function 세금예수금_백석_(dryRun) {
   문제.forEach(function (x) { Logger.log('  ⚠️ ' + x); });
   if (dryRun) Logger.log('\n  ※ 미리보기입니다. 맞으면 세금예수금_백석_적용() 을 실행하세요.');
   else Logger.log('\n  ✅ 끝. 세금 예수금이 늘어난 만큼 「매출 순 이익」이 줄어듭니다. 정상입니다.\n  ⚠️ 다시 돌려도 안전합니다 (4대보험 줄은 한 번만 생김)');
+}
+
+// ════════════════════════════════════════════════════════════
+//  🧾 원당 고정비 합계 고치기 (26-10-26) — 미리보기 / 적용 쌍
+//  사장님: 「손익계산서 기준으로 해서 고정비도 올려서 계상시켜줘」
+//  증상: 원당 10월 고정비 196,900 = 화재보험·정수기·세무사·위생비만 · 바로 아래 테이블링·통신요금·식비(854,857)가
+//        고정비 합계·영업이익·순이익에 안 빠짐 (사장앱 손익 상세에서 발견)
+//  하는 일: 원당 파일의 「26년 N월 손익계산서」·「26년 x월」 시트에서 「고정비」 줄의 =SUM(위칸:아래칸) 끝을 「변동비」 바로 윗줄까지 늘림
+//  🔴 범위 못 박음: 원당점 파일 · 이름이 「26년 … 손익계산서」인 시트만 · 고정비 줄 바로 아래부터 시작하는 SUM 만
+//  ⚠️ 먼저 고정비_원당_미리보기() → 실행 기록에서 「넣는 줄」 이름 확인 → 고정비_원당_적용()
+// ════════════════════════════════════════════════════════════
+function 고정비_원당_미리보기() { 고정비_원당_(true); }
+function 고정비_원당_적용() { 고정비_원당_(false); }
+function 고정비_원당_(미리) {
+  var ss = SpreadsheetApp.openById(BRANCH_CONFIG['원당점'].ssId), 바꿈 = 0;
+  ss.getSheets().forEach(function (sh) {
+    var nm = sh.getName();
+    if (!/^26년\s*(\d+|x)월\s*손익계산서$/.test(nm.trim())) return;
+    var rng = sh.getDataRange(), vals = rng.getDisplayValues(), fx = rng.getFormulas();
+    var r고 = -1, r변 = -1, c라 = -1;
+    for (var r = 0; r < vals.length; r++) for (var c = 0; c < Math.min(6, vals[r].length); c++) {
+      var t = String(vals[r][c]).replace(/\s/g, '');
+      if (t === '고정비' && r고 < 0) { r고 = r; c라 = c; }
+      else if (t === '변동비' && r고 >= 0 && r변 < 0 && r > r고) r변 = r;
+    }
+    if (r고 < 0 || r변 < 0) { Logger.log('⏭ ' + nm + ' — 고정비/변동비 줄을 못 찾음'); return; }
+    var 끝줄 = r변;   // 시트 행 번호(1부터) = 변동비 바로 윗줄
+    var 이름들 = []; for (var k = r고 + 1; k < r변; k++) { var 이 = String(vals[k][c라] || '').trim(); if (이) 이름들.push(이); }
+    var 찾음 = false;
+    for (var c2 = 0; c2 < fx[r고].length; c2++) {
+      var f = fx[r고][c2], m = String(f).match(/^=SUM\(\s*\$?([A-Z]+)\$?(\d+)\s*:\s*\$?([A-Z]+)\$?(\d+)\s*\)$/i);
+      if (!f) continue;
+      if (!m) { Logger.log('⚠️ ' + nm + ' ' + sh.getRange(r고 + 1, c2 + 1).getA1Notation() + ' 수식 꼴이 다름 (안 고침): ' + f); 찾음 = true; continue; }
+      if (+m[2] !== r고 + 2) continue;   // 고정비 바로 아랫줄부터 더하는 SUM 만
+      찾음 = true;
+      if (+m[4] >= 끝줄) { Logger.log('✅ ' + nm + ' 이미 됨 ' + f); continue; }
+      var 새 = '=SUM(' + m[1] + m[2] + ':' + m[3] + 끝줄 + ')';
+      Logger.log((미리 ? '[미리보기] ' : '[적용] ') + nm + ' ' + sh.getRange(r고 + 1, c2 + 1).getA1Notation() + '  ' + f + '  →  ' + 새 +
+                 '   · 넣는 줄: ' + 이름들.join(', '));
+      if (!미리) { sh.getRange(r고 + 1, c2 + 1).setFormula(새); 바꿈++; }
+    }
+    if (!찾음) Logger.log('⚠️ ' + nm + ' 고정비 줄에 수식이 없음');
+  });
+  Logger.log(미리 ? '미리보기 끝 — 위 「넣는 줄」 이름이 맞으면 고정비_원당_적용()' : '적용 끝 · ' + 바꿈 + '칸');
 }
