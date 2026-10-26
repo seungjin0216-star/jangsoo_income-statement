@@ -3844,8 +3844,11 @@ function syncLiquorCosts(branchName, months) {
              (기준 ? ' (' + 기준 + ' 이후)' : ' (전체)') + ' ---');
 
   var stockSS = SpreadsheetApp.openById(STOCK_SS_ID);
-  var sheet   = stockSS.getSheetByName('식자재발주');
-  if (!sheet) { Logger.log('식자재발주 시트 없음'); return; }
+  // 🔴 26-10-26 원당은 「식자재발주_원당」 탭 (원당 발주 GAS 가 9/20 부터 따로 씀 · 문서 고기주문_원당/APP.md)
+  //    그전엔 「식자재발주」만 읽어서 9/20 이후 원당 주류·음료가 통째로 빠짐 (사장님 「원당 주류, 음료가 손익계산서 계상이 안 되고 있어 · 백석과 단가가 같으니까」)
+  var 탭이름 = (branchName === '원당점') ? '식자재발주_원당' : '식자재발주';
+  var sheet   = stockSS.getSheetByName(탭이름);
+  if (!sheet) { Logger.log(탭이름 + ' 시트 없음'); return; }
 
   var config   = BRANCH_CONFIG[branchName];
   var profitSS = SpreadsheetApp.openById(config.ssId);
@@ -3867,6 +3870,8 @@ function syncLiquorCosts(branchName, months) {
     // ⚠️ 2026-09-04 — 콩나물을 여기 넣었습니다.
     //    발주 기록은 남는데 금액 계산이 없어 계상이 통째로 빠져 있었습니다.
     if (supplier !== '주류' && supplier !== '음료수' && supplier !== '콩나물') continue;
+    // 26-10-26 사장님 「콩나물도 현재 백석은 시킨 날마다 계상 중이라면 3개 전부 자동 계산」 → 원당도 주류·음료·콩나물 셋 다 발주 날마다
+    //   ⚠️ 그래서 원당 콩나물을 영수증앱에 한 달치 금액으로 또 넣으면 두 번 잡힘 (9/30 396,000 같은 것)
 
     // 날짜 파싱 (Date 객체 / YYYY-MM-DD / YY.MM.DD(요일) 세 형식 모두 처리)
     var ymd;
