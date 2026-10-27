@@ -189,7 +189,12 @@ const COL_FILE_ID   = 8;
 var STAFF_TAB      = '직원명부';
 var STAFF_CATEGORY = '직원급여';                      // 지출및매출로그 분류
 
-var STAFF_HEADERS  = ['id', '이름', '지점', '월급', '시작연월', '종료연월', '메모'];
+var STAFF_HEADERS  = ['id', '이름', '지점', '월급', '시작연월', '종료연월', '메모', '구분', '4대보험지점', '신고보수'];
+// 🧾 26-10-27 뒤 세 칸 (사장님 「4대보험만 내는 인원도 넣을 수 있는 칸 · 체계는 직원과 동일하나 급여가 계상 안 됨」
+//    「황미광이 원당에서 실제로 일하지만 … 원당에서 급여를 지급하는 것은 맞지만, 4대보험은 백석에서 내고 있어」)
+//    구분        빈칸 = 직원 (월급이 「지점」 직원급여로) · 「4대보험만」 = 급여 계상 없음, 4대보험 계산에만
+//    4대보험지점  빈칸 = 지점과 같음 · 다르면 4대보험은 그 지점 손익으로
+//    신고보수    빈칸 = 월급 · 4대보험 신고한 월급이 실제 월급과 다를 때
 
 function staffRouter_(data) {
   try {
@@ -224,6 +229,8 @@ function staffSheet_(branchName) {
     sh.getRange(1, 1, 1, STAFF_HEADERS.length).setFontWeight('bold').setBackground('#e0e7ff');
     sh.setFrozenRows(1);
   }
+  // 26-10-27 옛 명부에 새 칸 머리글 붙이기 (한 번만)
+  if (String(sh.getRange(1, 8).getValue() || '') !== '구분') sh.getRange(1, 8, 1, 3).setValues([['구분', '4대보험지점', '신고보수']]).setFontWeight('bold').setBackground('#e0e7ff');
   return sh;
 }
 
@@ -298,6 +305,9 @@ function staffSave_(staff) {
     String(staff['시작연월'] || '').trim(),
     String(staff['종료연월'] || '').trim(),
     staff['메모'] || '',
+    String(staff['구분'] || '').trim() === '4대보험만' ? '4대보험만' : '',
+    (BRANCH_CONFIG[staff['4대보험지점']] ? staff['4대보험지점'] : ''),
+    Number(staff['신고보수']) || '',
   ];
 
   // 지점이 바뀌었으면 이전 지점 파일에서 지운다 (양쪽에 남아 이중 계상되는 것 방지)
@@ -360,6 +370,7 @@ function syncStaffCosts(branchName, ym) {
   // 그 지점 파일의 명부만 읽는다
   var total = 0;
   staffOf_(branchName).forEach(function (s) {
+    if (String(s['구분'] || '') === '4대보험만') return;   // 26-10-27 급여 계상 없음 (4대보험 계산에만)
     if (staffOnDuty_(s, ym)) total += Number(s['월급']) || 0;
   });
 
@@ -2202,6 +2213,13 @@ function dailyProcess() {
     if (!lock.tryLock(300000)) { Logger.log("⚠️ 다른 프로세스 실행 중"); return; }
     Logger.log("=== 자동 처리 시작 ===");
     _RUN_STAT = { 성공: 0, 오류: 0, 거름: 0 };
+    // 🧾 26-10-27 4대보험 추정 — 지난달·이번 달 (실제 납부액이 있으면 0) · 사장님 「가장 근사치로」
+    //    26-10-27 사장님 「데이터를 채워놓고 해야 하는 거라면 10월 말 끝나니까 그거에 맞춰서 알아서 돌게」
+    //    → 11-01 새벽부터 저절로 켜짐 (그 전엔 사대보험추정_적용() 을 누르면 바로). 지난 달들은 안 채움 — 그때 명부가 지금과 달라서
+    var 켬_ = PropertiesService.getScriptProperties().getProperty('사대보험_켬');
+    if (!켬_ && Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd') >= '2026-11-01') { PropertiesService.getScriptProperties().setProperty('사대보험_켬', '자동 ' + new Date().toISOString()); 켬_ = '1'; }
+    if (켬_) try { var 지금_ = new Date(), 이번_ = Utilities.formatDate(지금_, TIMEZONE, 'yyyy-MM'), 지난_ = new Date(지금_.getFullYear(), 지금_.getMonth() - 1, 1);
+          사대보험추정_(Utilities.formatDate(지난_, TIMEZONE, 'yyyy-MM')); 사대보험추정_(이번_); } catch (e) { Logger.log('4대보험 추정 못 함: ' + e.message); }
     // 🧾 26-10-26 원당 고정비 합계 고치기 — 사장님 「계상이 안 되었다면 바로 실행해 줘」 → 새벽에 한 번만 (속성 표시로 다시 안 돎)
     try { var P_ = PropertiesService.getScriptProperties(); if (!P_.getProperty('고정비_원당_261026')) { 고정비_원당_(false); P_.setProperty('고정비_원당_261026', new Date().toISOString()); } }
     catch (e) { Logger.log('고정비_원당 못 함: ' + e.message); }
@@ -8475,4 +8493,79 @@ function 고정비_원당_(미리) {
     if (!찾음) Logger.log('⚠️ ' + nm + ' 고정비 줄에 수식이 없음');
   });
   Logger.log(미리 ? '미리보기 끝 — 위 「넣는 줄」 이름이 맞으면 고정비_원당_적용()' : '적용 끝 · ' + 바꿈 + '칸');
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  🧾 4대보험 추정 계상 (26-10-27) — 사장님 「손익계산서에 반영될 4대보험 … 가장 근사치로」
+//  요율 (사장님 「그렇게 하도록 하자 · 정확한 요율이 확정되면 정정」)
+//    직원           신고보수(없으면 월급) × 10.9%  ← 가게 몫만 (근로자 몫은 월급 안에서 빠져 이미 세전에 들어 있음)
+//    4대보험만 인원  신고보수 × 20.6%              ← 월급을 안 주니 근로자 몫까지 가게가 냄
+//  어느 손익으로: 「4대보험지점」(없으면 지점) — 황미광: 급여 원당 · 4대보험 백석
+//  🔴 실제 납부액이 그 달 로그에 「4대보험」(손 입력)으로 있으면 추정은 0 (사장님 「실제가 더 좋으니」)
+//  기록: 지출및매출로그 분류 「4대보험」 · 1일 · 표시 [자동]4대보험추정_지점_YYYY-MM (실제와 같은 분류 → 같은 줄에 잡힘)
+//  ⚠️ 요율을 바꾸면 아래 두 숫자만
+// ════════════════════════════════════════════════════════════
+var 사대요율_직원_ = 0.109, 사대요율_보험만_ = 0.206;
+function 사대보험계산_(모두, b, ym) {
+  var 추정 = 0, 내역 = [];
+  모두.forEach(function (s) {
+    if (!staffOnDuty_(s, ym)) return;
+    var 낸곳 = String(s['4대보험지점'] || '').trim() || s['지점'];
+    if (낸곳 !== b) return;
+    var 기준 = Number(s['신고보수']) || Number(s['월급']) || 0, 만 = String(s['구분'] || '') === '4대보험만';
+    var 금액 = Math.round(기준 * (만 ? 사대요율_보험만_ : 사대요율_직원_));
+    if (금액 > 0) { 추정 += 금액; 내역.push(s['이름'] + (만 ? '(4대보험만)' : '') + ' ' + 금액.toLocaleString()); }
+  });
+  return { 추정: 추정, 내역: 내역 };
+}
+function 사대보험추정_(ym, 미리) {
+  var 모두 = staffList_().staff, 결과 = {};
+  Object.keys(BRANCH_CONFIG).forEach(function (b) {
+    var c = 사대보험계산_(모두, b, ym);
+    var ss = SpreadsheetApp.openById(BRANCH_CONFIG[b].ssId), log = ss.getSheetByName('지출및매출로그');
+    if (!log) return;
+    var marker = '[자동]4대보험추정_' + b + '_' + ym, v = log.getLastRow() > 1 ? log.getRange(2, 1, log.getLastRow() - 1, 6).getValues() : [];
+    var 실제 = 0, 내행 = -1;
+    v.forEach(function (r, i) {
+      var d = r[0] instanceof Date ? Utilities.formatDate(r[0], TIMEZONE, 'yyyy-MM') : String(r[0]).slice(0, 7);
+      if (String(r[5]).trim() === marker) { 내행 = i + 2; return; }
+      if (d === ym && String(r[1]).trim() === '4대보험' && String(r[5]).indexOf('[자동]') !== 0) 실제 += Number(String(r[3]).replace(/[^0-9.-]/g, '')) || 0;
+    });
+    var 쓸 = 실제 > 0 ? 0 : c.추정;
+    Logger.log((미리 ? '[미리보기] ' : '') + '🧾 [' + b + '] ' + ym + ' 4대보험 — 실제 ' + 실제.toLocaleString() + ' · 추정 ' + c.추정.toLocaleString() +
+               ' → ' + (실제 > 0 ? '실제 그대로 (추정 안 넣음)' : '추정 ' + 쓸.toLocaleString() + ' 계상') + (c.내역.length ? ' · ' + c.내역.join(', ') : ''));
+    if (!미리) {
+      if (쓸 > 0) upsertLogEntry(log, ym + '-01', '4대보험', b + ' ' + ym + ' 4대보험 추정 (' + c.내역.join(', ') + ')', 쓸, b, marker);
+      else if (내행 > 0) { log.getRange(내행, 4).setValue(0); log.getRange(내행, 3).setValue(b + ' ' + ym + ' 4대보험 추정 — 실제 납부액이 있어 0'); }   // 지우지 않고 0
+    }
+    결과[b] = { 추정: c.추정, 실제: 실제, 계상: 쓸 };
+  });
+  return 결과;
+}
+/* 2026년 1월 ~ 이번 달 한 번에 (🔴 범위 못 박음) · 미리보기는 아무것도 안 씀 */
+function 사대보험추정_미리보기() { 사대보험추정_범위_(true); }
+function 사대보험추정_적용() { 사대보험추정_범위_(false); PropertiesService.getScriptProperties().setProperty('사대보험_켬', new Date().toISOString()); Logger.log('이제 새벽마다 지난달·이번 달 4대보험 추정을 자동으로 넣습니다'); }
+function 사대보험추정_범위_(미리) {
+  var 지금 = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM');
+  for (var m = 1; m <= 12; m++) { var ym = '2026-' + String(m).padStart(2, '0'); if (ym > 지금) break; 사대보험추정_(ym, 미리); }
+  Logger.log(미리 ? '\n미리보기 끝 — 아무것도 안 바꿈' : '\n적용 끝');
+}
+
+/* 🔎 시트 구조 보기 (읽기만) — 4대보험 줄을 세금 예수금으로 옮기기 전에 수식 꼴을 확인
+   백석·원당 각 「26년 10월 손익계산서」에서: 세금 예수금·부가세·종소세·4대보험 예수금·변동비 안 4대보험 줄의 라벨·C·G 수식 */
+function 사대보험_구조보기() {
+  Object.keys(BRANCH_CONFIG).forEach(function (b) {
+    if (b !== '백석점' && b !== '원당점') return;
+    var ss = SpreadsheetApp.openById(BRANCH_CONFIG[b].ssId), sh = ss.getSheetByName('26년 10월 손익계산서');
+    if (!sh) { Logger.log(b + ' 10월 시트 없음'); return; }
+    var n = Math.min(sh.getLastRow(), 70), lab = sh.getRange(1, 1, n, 4).getDisplayValues(), fx = sh.getRange(1, 1, n, 8).getFormulas();
+    Logger.log('════ ' + b + ' · ' + sh.getName() + ' (' + n + '줄) ════');
+    Logger.log('  11행 G~H: ' + JSON.stringify(sh.getRange(11, 7, 1, 2).getFormulas()[0]) + ' 값 ' + JSON.stringify(sh.getRange(11, 7, 1, 2).getDisplayValues()[0]));
+    for (var r = 0; r < n; r++) {
+      var t = (lab[r][1] || lab[r][0] || '').replace(/\s/g, '');
+      if (/세금예수금|부가세예수금|종합소득세예수금|4대보험|변동비|매출순이익|영업이익|카드수수료|광고비/.test(t))
+        Logger.log('  ' + (r + 1) + '행 [' + (lab[r][1] || lab[r][0]) + '] C=' + fx[r][2] + ' · G=' + String(fx[r][6]).slice(0, 220));
+    }
+  });
 }
