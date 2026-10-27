@@ -2220,6 +2220,9 @@ function dailyProcess() {
     if (!켬_ && Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd') >= '2026-11-01') { PropertiesService.getScriptProperties().setProperty('사대보험_켬', '자동 ' + new Date().toISOString()); 켬_ = '1'; }
     if (켬_) try { var 지금_ = new Date(), 이번_ = Utilities.formatDate(지금_, TIMEZONE, 'yyyy-MM'), 지난_ = new Date(지금_.getFullYear(), 지금_.getMonth() - 1, 1);
           사대보험추정_(Utilities.formatDate(지난_, TIMEZONE, 'yyyy-MM')); 사대보험추정_(이번_); } catch (e) { Logger.log('4대보험 추정 못 함: ' + e.message); }
+    // 🧾 26-10-27 4대보험 줄을 세금 예수금으로 — 사장님 「응」 뒤 새벽에 한 번만 (속성 사대보험옮김_261027) · 결과는 실행 기록 [적용] 줄
+    try { var Q_ = PropertiesService.getScriptProperties(); if (!Q_.getProperty('사대보험옮김_261027')) { 사대보험옮기기_(false); Q_.setProperty('사대보험옮김_261027', new Date().toISOString()); } }
+    catch (e) { Logger.log('사대보험옮기기 못 함: ' + e.message); }
     // 🧾 26-10-26 원당 고정비 합계 고치기 — 사장님 「계상이 안 되었다면 바로 실행해 줘」 → 새벽에 한 번만 (속성 표시로 다시 안 돎)
     try { var P_ = PropertiesService.getScriptProperties(); if (!P_.getProperty('고정비_원당_261026')) { 고정비_원당_(false); P_.setProperty('고정비_원당_261026', new Date().toISOString()); } }
     catch (e) { Logger.log('고정비_원당 못 함: ' + e.message); }
@@ -8568,4 +8571,67 @@ function 사대보험_구조보기() {
         Logger.log('  ' + (r + 1) + '행 [' + (lab[r][1] || lab[r][0]) + '] C=' + fx[r][2] + ' · G=' + String(fx[r][6]).slice(0, 220));
     }
   });
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  🧾 4대보험 줄을 세금 예수금으로 (26-10-27) — 사장님 「백석 4대보험 예수금 매달 고정 처리했는데 원당처럼 통일 ·
+//     원당은 변동비에 4대보험이 있긴 해 그걸 세금 쪽으로 넘어가게 하면 됨」
+//  원당  변동비 안 「4대보험」 줄 → 세금 예수금 맨 아래 새 줄 「4대보험 예수금」(같은 날짜별 SUMIFS) · 옛 줄은 이름에 「(옮김)」 + 0
+//        순이익은 그대로 · 영업이익만 올라감 (세금 예수금으로 내려가서) · 범위 1월~12월 + x월 (옮기기만이라 합계 같음)
+//  백석  세금 예수금 안 「4대보험 예수금」 고정 1,000,000 → 날짜별 SUMIFS '4대보험' (광고비 줄 수식을 본떠)
+//        🔴 범위 10월~12월 + x월만 — 1~9월은 자료가 없어 0 이 되면 이익이 부풀려짐 → 100만 고정 그대로
+//  ⚠️ 행을 지우지 않음 · 여러 번 돌려도 안전 (이미 된 시트는 「이미 됨」)
+// ════════════════════════════════════════════════════════════
+function 사대보험옮기기_미리보기() { 사대보험옮기기_(true); }
+function 사대보험옮기기_적용() { 사대보험옮기기_(false); }
+function 사대보험옮기기_(미리) {
+  var 머리 = 미리 ? '[미리보기] ' : '[적용] ', 일 = 7, 일수 = 31;   // G~AK
+  function 줄찾기(lab, 이름, 부터, 까지) { for (var r = 부터 || 0; r < (까지 || lab.length); r++) for (var c = 0; c < 3; c++) if (String(lab[r][c]).replace(/\s/g, '') === 이름) return { r: r, c: c }; return null; }
+  ['원당점', '백석점'].forEach(function (b) {
+    var ss = SpreadsheetApp.openById(BRANCH_CONFIG[b].ssId);
+    ss.getSheets().forEach(function (sh) {
+      var nm = sh.getName().trim(), m = nm.match(/^26년\s*(\d+|x)월\s*손익계산서$/);
+      if (!m) return;
+      var 달 = m[1] === 'x' ? 99 : +m[1];
+      var n = Math.min(sh.getLastRow(), 90), lab = sh.getRange(1, 1, n, 3).getDisplayValues();
+      var 세 = 줄찾기(lab, '세금예수금'), 영 = 줄찾기(lab, '영업이익');
+      if (!세 || !영) { Logger.log('⏭ ' + b + ' ' + nm + ' — 세금 예수금/영업이익 줄을 못 찾음'); return; }
+      if (b === '원당점') {
+        if (줄찾기(lab, '4대보험예수금', 세.r)) { Logger.log('✅ ' + b + ' ' + nm + ' 이미 됨'); return; }
+        var 옛 = 줄찾기(lab, '4대보험', 0, 영.r);
+        if (!옛) { Logger.log('⏭ ' + b + ' ' + nm + ' — 변동비 안 4대보험 줄 없음'); return; }
+        var 종 = 줄찾기(lab, '종합소득세예수금', 세.r);
+        var 합 = sh.getRange(세.r + 1, 3).getFormula(), mm = String(합).match(/^=SUM\(\s*C(\d+)\s*:\s*C(\d+)\s*\)$/i);
+        if (!종 || !mm || +mm[2] !== 종.r + 1) { Logger.log('⚠️ ' + b + ' ' + nm + ' 세금 예수금 수식 꼴이 다름 (안 고침): ' + 합); return; }
+        var 옛값 = sh.getRange(옛.r + 1, 3).getDisplayValue(), 날식 = sh.getRange(옛.r + 1, 일, 1, 일수).getFormulasR1C1();
+        var 새줄 = 종.r + 2;   // 시트 행 번호 (종합소득세 바로 아래)
+        Logger.log(머리 + b + ' ' + nm + '  ' + (옛.r + 1) + '행 「4대보험」(' + 옛값 + ') → ' + 새줄 + '행 「4대보험 예수금」 새로 · 세금 예수금 =SUM(C' + mm[1] + ':C' + 새줄 + ')');
+        if (미리) return;
+        sh.insertRowAfter(종.r + 1);
+        sh.getRange(종.r + 1, 1, 1, sh.getLastColumn()).copyTo(sh.getRange(새줄, 1, 1, sh.getLastColumn()), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+        sh.getRange(새줄, 종.c + 1).setValue('4대보험 예수금');
+        sh.getRange(새줄, 3).setFormula('=SUM(G' + 새줄 + ':AK' + 새줄 + ')');
+        sh.getRange(새줄, 일, 1, 일수).setFormulasR1C1(날식);
+        sh.getRange(세.r + 1, 3).setFormula('=SUM(C' + mm[1] + ':C' + 새줄 + ')');
+        sh.getRange(옛.r + 1, 옛.c + 1).setValue('4대보험(옮김)');
+        sh.getRange(옛.r + 1, 3).setValue(0);
+        sh.getRange(옛.r + 1, 일, 1, 일수).setValue('');   // 날짜 칸 수식은 새 줄로 옮겨 감 (자료는 로그에 그대로)
+      } else {
+        if (달 < 10) return;   // 🔴 1~9월은 100만 고정 그대로
+        var 사 = 줄찾기(lab, '4대보험예수금', 세.r), 광 = 줄찾기(lab, '광고비');
+        if (!사 || !광) { Logger.log('⏭ ' + b + ' ' + nm + ' — 4대보험 예수금/광고비 줄을 못 찾음'); return; }
+        var 지금식 = sh.getRange(사.r + 1, 3).getFormula();
+        if (/SUM\(G/i.test(지금식)) { Logger.log('✅ ' + b + ' ' + nm + ' 이미 됨'); return; }
+        var 광식 = sh.getRange(광.r + 1, 일, 1, 일수).getFormulasR1C1();
+        if (!/"광고비"/.test(광식[0][0])) { Logger.log('⚠️ ' + b + ' ' + nm + ' 광고비 날짜 수식 꼴이 다름 (안 고침): ' + 광식[0][0]); return; }
+        var 새식 = [광식[0].map(function (f) { return String(f).replace('"광고비"', '"4대보험"'); })];
+        Logger.log(머리 + b + ' ' + nm + '  ' + (사.r + 1) + '행 「4대보험 예수금」 ' + sh.getRange(사.r + 1, 3).getDisplayValue() + ' 고정 → 날짜별 「4대보험」 합계');
+        if (미리) return;
+        sh.getRange(사.r + 1, 일, 1, 일수).setFormulasR1C1(새식);
+        sh.getRange(사.r + 1, 3).setFormula('=SUM(G' + (사.r + 1) + ':AK' + (사.r + 1) + ')');
+      }
+    });
+  });
+  Logger.log(미리 ? '\n미리보기 끝 — 아무것도 안 바꿈' : '\n적용 끝');
 }
