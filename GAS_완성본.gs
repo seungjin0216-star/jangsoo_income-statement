@@ -2220,6 +2220,11 @@ function dailyProcess() {
     if (!켬_ && Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd') >= '2026-11-01') { PropertiesService.getScriptProperties().setProperty('사대보험_켬', '자동 ' + new Date().toISOString()); 켬_ = '1'; }
     if (켬_) try { var 지금_ = new Date(), 이번_ = Utilities.formatDate(지금_, TIMEZONE, 'yyyy-MM'), 지난_ = new Date(지금_.getFullYear(), 지금_.getMonth() - 1, 1);
           사대보험추정_(Utilities.formatDate(지난_, TIMEZONE, 'yyyy-MM')); 사대보험추정_(이번_); } catch (e) { Logger.log('4대보험 추정 못 함: ' + e.message); }
+    // 🧾 26-10-28 원당 9월 기타세금 중복 0 · 백석 종소세 매출 비율 — 사장님 「응」 뒤 새벽에 한 번만 (속성) · 결과는 실행 기록 [적용] 줄
+    try { var R_ = PropertiesService.getScriptProperties(); if (!R_.getProperty('기타세금중복_261028')) { 기타세금중복_원당_(false); R_.setProperty('기타세금중복_261028', new Date().toISOString()); } }
+    catch (e) { Logger.log('기타세금중복 못 함: ' + e.message); }
+    try { var R2_ = PropertiesService.getScriptProperties(); if (!R2_.getProperty('종소세비율_백석_261028')) { 종소세비율_백석_(false); R2_.setProperty('종소세비율_백석_261028', new Date().toISOString()); } }
+    catch (e) { Logger.log('종소세비율_백석 못 함: ' + e.message); }
     // 🧾 26-10-27 4대보험 줄을 세금 예수금으로 — 사장님 「응」 뒤 새벽에 한 번만 (속성 사대보험옮김_261027) · 결과는 실행 기록 [적용] 줄
     try { var Q_ = PropertiesService.getScriptProperties(); if (!Q_.getProperty('사대보험옮김_261027')) { 사대보험옮기기_(false); Q_.setProperty('사대보험옮김_261027', new Date().toISOString()); } }
     catch (e) { Logger.log('사대보험옮기기 못 함: ' + e.message); }
@@ -2242,11 +2247,16 @@ function dailyProcess() {
     //    (9월이 그랬습니다 — 지급완료 10/1 12:09 · 23:18)
     //    → 매달 1~3일 새벽 2시마다 지난달 것을 다시 가져옵니다. 같은 표시로 갱신(upsert)이라 두 번 잡히지 않습니다
     //    ⚠️ 4일 이후에 지급완료한 것은 여전히 손으로: syncLaborCosts('백석점','YYYY-MM')
+    //    26-10-28 → 알바는 매일 밤 지난 두 달 (원당 9월 지급완료를 10/16·10/27 에 눌러 9월 알바비 0 — 사장님 「지급완료를 이미 누른 상태임 근데 안 올라간 것 같은데」)
+    //    같은 금액이면 다시 안 씀(upsert) → 매일 돌아도 가벼움 · 직원은 그대로 1~3일
+    [1, 2].forEach(function (k) {
+      var 달 = new Date(); 달.setDate(1); 달.setMonth(달.getMonth() - k);
+      var 달ym = Utilities.formatDate(달, TIMEZONE, 'yyyy-MM');
+      try { syncLaborCosts('백석점', 달ym); syncLaborCosts('원당점', 달ym); } catch (e) { Logger.log('알바 인건비 ' + 달ym + ' 못 함: ' + e.message); }
+    });
     if (new Date().getDate() <= 3) {
       var 지난달 = new Date(); 지난달.setDate(1); 지난달.setMonth(지난달.getMonth() - 1);
       var 지난달ym = Utilities.formatDate(지난달, TIMEZONE, 'yyyy-MM');
-      syncLaborCosts('백석점', 지난달ym);
-      syncLaborCosts('원당점', 지난달ym);
       staffSyncAll_(지난달ym);
       Logger.log('지난달 인건비 다시 가져옴: ' + 지난달ym);
     }
@@ -8635,4 +8645,60 @@ function 사대보험옮기기_(미리) {
     });
   });
   Logger.log(미리 ? '\n미리보기 끝 — 아무것도 안 바꿈' : '\n적용 끝');
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  🧾 26-10-28 원당 9월 기타세금 중복 → 0 (사장님 「두 금액 차이가 없다면 아마 중복일 거야 … 영향이 없다면 0원으로 만들어 줘」)
+//  🔴 범위 못 박음: 원당 · 2026-09 · 분류 「기타세금」 · 금액 2,356,330 딱 한 줄만 (같은 달 4대보험 2,353,330 과 겹침)
+//     다른 기타세금 줄(1월 213,820 등)은 안 건드림 · 지우지 않음 → 금액 0 · 분류 「기타세금_중복」 · 항목명 뒤에 사유
+//     정확히 한 줄이 아니면 아무것도 안 바꿈
+// ════════════════════════════════════════════════════════════
+function 기타세금중복_원당_미리보기() { 기타세금중복_원당_(true); }
+function 기타세금중복_원당_적용() { 기타세금중복_원당_(false); }
+function 기타세금중복_원당_(미리) {
+  var log = SpreadsheetApp.openById(BRANCH_CONFIG['원당점'].ssId).getSheetByName('지출및매출로그');
+  var v = log.getRange(2, 1, log.getLastRow() - 1, 6).getValues(), 맞음 = [], 사대 = [];
+  v.forEach(function (r, i) {
+    var d = r[0] instanceof Date ? Utilities.formatDate(r[0], TIMEZONE, 'yyyy-MM') : String(r[0]).slice(0, 7);
+    var 금 = Number(String(r[3]).replace(/[^0-9.-]/g, '')) || 0, 분 = String(r[1]).trim();
+    if (d !== '2026-09') return;
+    if (분 === '기타세금' && 금 === 2356330) 맞음.push({ 행: i + 2, 항목: r[2] });
+    if (분 === '4대보험') 사대.push(r[2] + ' ' + 금.toLocaleString());
+  });
+  Logger.log('원당 9월 4대보험 줄: ' + (사대.join(' · ') || '없음'));
+  if (맞음.length !== 1) { Logger.log('⚠️ 기타세금 2,356,330 줄이 ' + 맞음.length + '개 — 한 줄이 아니라 안 바꿈'); return; }
+  var m = 맞음[0];
+  Logger.log((미리 ? '[미리보기] ' : '[적용] ') + m.행 + '행 「' + m.항목 + '」 기타세금 2,356,330 → 0 · 분류 기타세금_중복');
+  if (미리) return;
+  log.getRange(m.행, 2, 1, 3).setValues([['기타세금_중복', m.항목 + ' (4대보험과 중복 · 26-10-28 사장님 확인)', 0]]);
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  🧾 26-10-28 백석 종소세 예수금 — 고정 208,333 → 매출 × 비율 (사장님 「매출에 비례해서 되는 게 가장 정확할 것 같아」)
+//  부가세 줄과 같은 꼴: C = (부가세 수식의 매출 칸) × D칸 비율 · D칸에 비율
+//  🔴 범위 못 박음: 백석 · 26년 1~12월 + x월 · 원당은 안 건드림 (원당은 이미 매출 × 1.1%)
+// ════════════════════════════════════════════════════════════
+var 종소세율_백석_ = 0.007;   // 0.68% = 연 250만 ÷ 1~10월 평균 매출 · 사장님 확정 전 (확인 필요)
+function 종소세비율_백석_미리보기() { 종소세비율_백석_(true); }
+function 종소세비율_백석_적용() { 종소세비율_백석_(false); }
+function 종소세비율_백석_(미리) {
+  var ss = SpreadsheetApp.openById(BRANCH_CONFIG['백석점'].ssId);
+  ss.getSheets().forEach(function (sh) {
+    var nm = sh.getName().trim();
+    if (!/^26년\s*(\d+|x)월\s*손익계산서$/.test(nm)) return;
+    var n = Math.min(sh.getLastRow(), 90), b = sh.getRange(1, 2, n, 1).getValues();
+    var 행 = function (이) { for (var i = 0; i < n; i++) if (String(b[i][0] || '').replace(/\s+/g, '') === 이) return i + 1; return -1; };
+    var 부 = 행('부가세예수금'), 종 = 행('종합소득세예수금');
+    if (부 < 0 || 종 < 0) { Logger.log('⏭ ' + nm + ' 부가세/종소세 줄 못 찾음'); return; }
+    var 부식 = sh.getRange(부, 3).getFormula(), mm = String(부식).match(/^=\s*(\$?C\$?\d+)\s*\*\s*\$?D\$?\d+\s*$/i);
+    if (!mm) { Logger.log('⚠️ ' + nm + ' 부가세 수식 꼴이 다름 (안 고침): ' + 부식); return; }
+    var 새 = '=' + mm[1] + '*D' + 종;
+    if (sh.getRange(종, 3).getFormula() === 새 && Number(sh.getRange(종, 4).getValue()) === 종소세율_백석_) { Logger.log('✅ ' + nm + ' 이미 됨'); return; }
+    Logger.log((미리 ? '[미리보기] ' : '[적용] ') + nm + ' 종소세 ' + sh.getRange(종, 3).getDisplayValue() + ' (' + (sh.getRange(종, 3).getFormula() || '값') + ') → ' + 새 + ' · D' + 종 + '=' + 종소세율_백석_);
+    if (미리) return;
+    sh.getRange(종, 4).setValue(종소세율_백석_).setNumberFormat(sh.getRange(부, 4).getNumberFormat());
+    sh.getRange(종, 3).setFormula(새);
+  });
 }
