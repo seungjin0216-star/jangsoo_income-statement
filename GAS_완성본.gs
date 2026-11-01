@@ -3783,8 +3783,12 @@ function syncMeatCosts(branchName, months) {
              (기준 ? ' (' + 기준 + ' 이후)' : ' (전체)') + ' ---');
 
   var stockSS = SpreadsheetApp.openById(STOCK_SS_ID);
-  var inSheet = stockSS.getSheetByName('입고기록');
-  if (!inSheet) { Logger.log('입고기록 시트 없음'); return; }
+  // 🥩 26-11-01 원당은 「입고기록_원당」 탭 (원당 발주 GAS 가 9/20 부터 따로 씀) · 사장님 「11월달부터 백석처럼 고기 입고 … 자동 손익계산서」
+  //    ⚠️ 원당은 2026-11-01 부터만 셈 (그 전 원당 고기값은 사장님이 따로 맞춰 둔 것 — 건드리지 않음) · 단가표 calcMeatCost 는 백석과 같음
+  var 탭이름 = (branchName === '원당점') ? '입고기록_원당' : '입고기록';
+  if (branchName === '원당점' && (!기준 || 기준 < '2026-11-01')) 기준 = '2026-11-01';
+  var inSheet = stockSS.getSheetByName(탭이름);
+  if (!inSheet) { Logger.log(탭이름 + ' 시트 없음'); return; }
 
   var config   = BRANCH_CONFIG[branchName];
   var profitSS = SpreadsheetApp.openById(config.ssId);
