@@ -337,8 +337,10 @@ function staffSave_(staff) {
   SpreadsheetApp.flush();
   Logger.log('👔 직원 저장: [' + branchName + '] ' + row[1] + ' / ' + 월급.toLocaleString() + '원');
 
-  // 명부가 바뀌었으니 이번 달 인건비를 바로 다시 계산한다
-  staffSyncAll_(Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM'));
+  // 명부가 바뀌었으니 지난달 인건비를 바로 다시 계산한다
+  //   26-11-08 사장님 「당월은 아니고 전월」 → 전에는 이번 달을 넣었음 (이번 달은 다음 달 1일 밤에)
+  var 지난_ = new Date(); 지난_.setDate(1); 지난_.setMonth(지난_.getMonth() - 1);
+  staffSyncAll_(Utilities.formatDate(지난_, TIMEZONE, 'yyyy-MM'));
 
   return { ok: true, id: id };
 }
@@ -1587,6 +1589,33 @@ function doGet(e) {
     }
   }
 
+  // 🔍 26-11-07 직원 급여 0원 원인 보기 — 읽기만 (지점·달마다: 로그 「직원급여」 합 · 월별탭 「직원급여」 칸 수식·표시값 · 명부 합)
+  if (action === 'payrollCheck') {
+    try {
+      var 결과 = {};
+      Object.keys(BRANCH_CONFIG).forEach(function (b) {
+        var ss = SpreadsheetApp.openById(BRANCH_CONFIG[b].ssId), lg = ss.getSheetByName('지출및매출로그'), 로그 = {};
+        if (lg && lg.getLastRow() > 1) lg.getRange(2, 1, lg.getLastRow() - 1, 6).getValues().forEach(function (r) {
+          if (String(r[1]).trim() !== STAFF_CATEGORY) return; var d = toDate_(r[0]); if (!d) return;
+          var ym = Utilities.formatDate(d, TIMEZONE, 'yyyy-MM'); 로그[ym] = (로그[ym] || 0) + (Number(r[3]) || 0); });
+        결과[b] = [8, 9, 10, 11].map(function (m) {
+          var ym = '2026-' + ('0' + m).slice(-2), sh = ss.getSheetByName('26년 ' + m + '월 손익계산서'), row = sh ? findLabelRow_(sh, '직원급여') : -1;
+          var 명부 = 0; staffOf_(b).forEach(function (x) { if (String(x['구분'] || '') !== '4대보험만' && staffOnDuty_(x, ym)) 명부 += Number(x['월급']) || 0; });
+          return { ym: ym, 로그: 로그[ym] || 0, 명부: 명부, 행: row, 수식: row > 0 ? sh.getRange(row, 3).getFormula().slice(0, 160) : '', 표시: row > 0 ? sh.getRange(row, 3).getDisplayValue() : '' };
+        });
+      });
+      // 직원급여 표시(F)가 붙은 줄 그대로 — 분류·날짜가 바뀌어 있으면 upsert 가 「이미 있음」으로 보고 안 씀
+      var 줄 = [];
+      Object.keys(BRANCH_CONFIG).forEach(function (b) {
+        var lg = SpreadsheetApp.openById(BRANCH_CONFIG[b].ssId).getSheetByName('지출및매출로그');
+        if (!lg || lg.getLastRow() < 2) return;
+        lg.getRange(2, 1, lg.getLastRow() - 1, 7).getDisplayValues().forEach(function (r, i) {
+          if (String(r[5]).indexOf('직원급여') >= 0 || String(r[1]).indexOf('직원') >= 0) 줄.push([b, i + 2].concat(r));
+        });
+      });
+      return out_(cb, { ok: true, 결과: 결과, 줄: 줄 });
+    } catch (err) { return out_(cb, { ok: false, error: err.message }); }
+  }
   if (action === 'staffList') {
     try {
       return out_(cb, { ok: true, data: staffList_() });
@@ -2254,12 +2283,14 @@ function dailyProcess() {
       var 달ym = Utilities.formatDate(달, TIMEZONE, 'yyyy-MM');
       try { syncLaborCosts('백석점', 달ym); syncLaborCosts('원당점', 달ym); } catch (e) { Logger.log('알바 인건비 ' + 달ym + ' 못 함: ' + e.message); }
     });
-    if (new Date().getDate() <= 3) {
-      var 지난달 = new Date(); 지난달.setDate(1); 지난달.setMonth(지난달.getMonth() - 1);
-      var 지난달ym = Utilities.formatDate(지난달, TIMEZONE, 'yyyy-MM');
-      staffSyncAll_(지난달ym);
-      Logger.log('지난달 인건비 다시 가져옴: ' + 지난달ym);
-    }
+    /* 👔 26-11-07 사장님 「사장앱에서 직원 인건비 계상이 안 되고 있음」 → 원당 10월 직원 급여 0원 (명부엔 황미광 350만 · 이승빈 380만)
+       26-11-08 사장님 「직원 인건비는 당월은 아니고 전월은 채워져야 해 … 11월 1일이 되면 10월 월급으로 찍히게끔」
+       → 매일 밤 **지난달만** (전에는 1~3일에만 → 그 사흘에 못 돌면 그 달은 0원으로 남음) · 같은 금액이면 다시 안 씀(upsert) */
+    [1].forEach(function (k) {
+      var 달 = new Date(); 달.setDate(1); 달.setMonth(달.getMonth() - k);
+      var 달ym = Utilities.formatDate(달, TIMEZONE, 'yyyy-MM');
+      try { staffSyncAll_(달ym); } catch (e) { Logger.log('직원 급여 ' + 달ym + ' 못 함: ' + e.message); }
+    });
 
     // 처리 결과 점검 — 전부 실패했으면 메일로 알린다
     //
