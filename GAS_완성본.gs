@@ -345,6 +345,35 @@ function staffSave_(staff) {
   return { ok: true, id: id };
 }
 
+/* 🧾 26-11-14 원당 9/22 「카드매출 7,300,000」 섞인 줄 정리 + 10월 직원 급여 넣기
+   사장님: 「맞아 원당 9월 카드매출이 많이 잡혔어 실제로는 6100만원 쯤 · 9월 22일 카드매출 175만원 쯤 · 직원 급여 계상되게끔」
+   무엇: 지출및매출로그에 표시(F) 「[자동]직원급여_원당점_2026-10」 인데 날짜 2026-09-22 · 분류 카드매출 · 금액 7,300,000 인 줄 (11/8 기준 1333행)
+        → 10/27 이승빈 님 명부 저장 때 생긴 10월 직원급여 줄의 날짜·분류가 카드매출로 덮어써짐 (덮은 쪽은 확인 필요)
+        → 9월 카드매출 68,379,000 = 진짜 61,079,000 + 7,300,000 · 10월 직원급여는 「이미 있음」으로 보고 안 들어감
+   고침: 그 줄 분류 「카드매출_중복」 · 금액 0 · 표시 끝에 「_섞임」 (지우지 않음 · 규칙 ④) → staffSyncAll_('2026-10') 이 새 줄로 730만
+   ⚠️ 범위 못 박음: 원당점 · 표시가 정확히 그 글자 · 날짜 2026-09-22 · 분류 카드매출 · 금액 7,300,000 인 줄만 */
+function 원당카드섞임_미리보기() { return 원당카드섞임_(true); }
+function 원당카드섞임_적용()   { return 원당카드섞임_(false); }
+function 원당카드섞임_(dryRun) {
+  var lg = SpreadsheetApp.openById(BRANCH_CONFIG['원당점'].ssId).getSheetByName('지출및매출로그');
+  var v = lg.getRange(2, 1, lg.getLastRow() - 1, 6).getValues(), 찾음 = [];
+  v.forEach(function (r, i) {
+    var d = toDate_(r[0]), ymd = d ? Utilities.formatDate(d, TIMEZONE, 'yyyy-MM-dd') : String(r[0]);
+    if (String(r[5]).trim() === '[자동]직원급여_원당점_2026-10' && ymd === '2026-09-22' && String(r[1]).trim() === '카드매출' && Number(r[3]) === 7300000) 찾음.push(i + 2);
+  });
+  var 결과 = { dryRun: dryRun, 찾은줄: 찾음 };
+  if (찾음.length !== 1) { 결과.멈춤 = '정확히 한 줄이 아니라 손대지 않음'; Logger.log(JSON.stringify(결과)); return 결과; }
+  if (!dryRun) {
+    var row = 찾음[0];
+    lg.getRange(row, 2).setValue('카드매출_중복');
+    lg.getRange(row, 4).setValue(0);
+    lg.getRange(row, 6).setValue('[자동]직원급여_원당점_2026-10_섞임');
+    SpreadsheetApp.flush();
+    결과.직원급여 = syncStaffCosts('원당점', '2026-10');
+  }
+  Logger.log(JSON.stringify(결과)); return 결과;
+}
+
 /** 모든 지점의 그 달 직원급여를 다시 계산해서 로그에 반영 */
 function staffSyncAll_(ym) {
   if (!ym) ym = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM');
@@ -1744,6 +1773,14 @@ function doPost(e) {
     //    당근 광고비처럼 「충전식」이라 영수증이 없는 것들을 위한 통로입니다.
     //    앱에서 계정을 고르고 금액을 적어 보내면 로그에 한 줄 들어갑니다.
     if (data.action === 'direct') return 직접입력_(data);
+    // 🧾 26-11-14 원당 9/22 섞인 줄 — 미리보기는 몇 번이든 · 적용은 한 번만 (속성 원당카드섞임_261114)
+    if (data.action === 'fix261114') {
+      var P = PropertiesService.getScriptProperties();
+      if (data.apply && P.getProperty('원당카드섞임_261114')) return jsonOut_({ ok: true, 이미: P.getProperty('원당카드섞임_261114') });
+      var r = 원당카드섞임_(!data.apply);
+      if (data.apply && !r.멈춤) P.setProperty('원당카드섞임_261114', new Date().toISOString());
+      return jsonOut_({ ok: true, 결과: r });
+    }
 
     // ── 직원 관리 요청 라우팅 ──────────────────────────────
     // 기존 영수증 앱은 action 없이 보내므로 아래 분기를 타지 않는다.
