@@ -197,6 +197,13 @@ var STAFF_HEADERS  = ['id', '이름', '지점', '월급', '시작연월', '종�
 //    신고보수    빈칸 = 월급 · 4대보험 신고한 월급이 실제 월급과 다를 때
 
 function staffRouter_(data) {
+  // 🔒 26-11-14 사장님 「손익 1~3 다 해」 ② 한 번에 한 곳만 — 직원 저장·동기화가 새벽 처리·영수증과 같은 순간에 로그를 쓰지 않게
+  //    (원당 로그 1333행이 「10월 직원급여」 표시인데 날짜·분류가 「9/22 카드매출」로 섞였던 일 · 26-11-08 발견)
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch (e) { return jsonOut_({ ok: false, error: '다른 처리가 돌고 있어요 — 잠시 뒤 다시' }); }
+  try { return staffRouterIn_(data); } finally { try { 로그이상알림_(); } catch (e) {} lock.releaseLock(); }
+}
+function staffRouterIn_(data) {
   try {
     switch (data.action) {
       case 'staffList'  : return jsonOut_({ ok: true, data: staffList_() });
@@ -2363,6 +2370,9 @@ function dailyProcess() {
       try { staffSyncAll_(달ym); } catch (e) { Logger.log('직원 급여 ' + 달ym + ' 못 함: ' + e.message); }
     });
 
+    // 🛡 26-11-14 ③ 손익 로그 자가 검사 (10월 이후 · 새로 생긴 이상만 메일) — 막혀도 아래 점검은 돌게
+    try { 로그자가검사_(); } catch (e) { Logger.log('로그 자가 검사 못 함: ' + e.message); }
+
     // 처리 결과 점검 — 전부 실패했으면 메일로 알린다
     //
     //   2026-08-19: Gemini API 키가 무효가 되어 영수증이 하나도 안 들어가고
@@ -2432,6 +2442,47 @@ function checkRunHealth_() {
       '드라이브 폴더에서 [확인요망] 파일을 확인해 주세요.'
     );
   }
+}
+
+/* 🛡 26-11-14 ①③ 손익 로그 이상 — 실행마다 모아 한 번에 메일 · 같은 것은 다시 안 알림 (속성 LOG_이상_본)
+   사장님 「앞으로 문제가 안 되게끔 … 소급하지 말고 전진법」 → 2026-10-01 이후 줄만 봄 */
+var _로그이상 = [];
+function 로그이상_(왜, 지점, 행, 내용, 표시) { _로그이상.push({ 왜: 왜, 지점: 지점, 행: 행, 내용: 내용, 표시: 표시 || '' }); Logger.log('🛡 로그 이상 [' + 지점 + ' ' + 행 + '행] ' + 왜 + ' — ' + 내용); }
+function 로그이상알림_() {
+  if (!_로그이상.length) return 0;
+  var P = PropertiesService.getScriptProperties(), 본 = {};
+  try { 본 = JSON.parse(P.getProperty('LOG_이상_본') || '{}'); } catch (e) {}
+  var 새 = _로그이상.filter(function (x) { var k = x.지점 + '|' + x.표시 + '|' + x.왜; if (본[k]) return false; 본[k] = new Date().toISOString().slice(0, 10); return true; });
+  _로그이상 = [];
+  if (!새.length) return 0;
+  P.setProperty('LOG_이상_본', JSON.stringify(본).slice(0, 8500));
+  notifyOwner_('손익 기록 이상 ' + 새.length + '줄 — 확인해 주세요', 새.map(function (x) { return '· [' + x.지점 + ' ' + x.행 + '행] ' + x.왜 + '\n   ' + x.내용 + (x.표시 ? '\n   표시 ' + x.표시 : ''); }).join('\n') +
+    '\n\n고치지는 않았습니다. 손익 시트 「지출및매출로그」에서 그 행을 보세요.\n(10월 이후 줄만 봅니다 · 옛 6~9월은 수기로 맞춘 달이라 안 봄)');
+  return 새.length;
+}
+/** ③ 매일 새벽 자가 검사 — 2026-10-01 이후 자동 줄만 (logScan 과 같은 기준 · 읽기만) */
+function 로그자가검사_() {
+  Object.keys(BRANCH_CONFIG).forEach(function (b) {
+    var lg = SpreadsheetApp.openById(BRANCH_CONFIG[b].ssId).getSheetByName('지출및매출로그'); if (!lg || lg.getLastRow() < 2) return;
+    var 본 = {}, 날 = {};
+    lg.getRange(2, 1, lg.getLastRow() - 1, 6).getValues().forEach(function (r, i) {
+      var f = String(r[5]).trim(); if (f.indexOf('[자동]') !== 0) return;
+      var 분류 = String(r[1]).trim(); if (/_중복$/.test(분류) || /_섞임$/.test(f)) return;
+      var d = toDate_(r[0]), ymd = d ? Utilities.formatDate(d, TIMEZONE, 'yyyy-MM-dd') : String(r[0]);
+      if (ymd < '2026-10-01') return;   // 전진법 — 옛 달은 안 봄
+      var m = f.match(/^\[자동\](.+)_(백석점|원당점)_(\d{4}-\d{2}(?:-\d{2})?)(_row\d+)?$/), 행 = i + 2;
+      var 내용 = ymd + ' · ' + 분류 + ' · ' + (Number(r[3]) || 0).toLocaleString() + '원';
+      if (!m) { 로그이상_('표시 모양을 모름', b, 행, 내용, f); return; }
+      var 기대 = m[1] === '4대보험추정' ? '4대보험' : m[1], 키 = m[3];
+      if (분류 !== 기대) 로그이상_('분류가 ' + 기대 + ' 이어야 함', b, 행, 내용, f);
+      if (키.length === 10 ? ymd !== 키 : ymd.slice(0, 7) !== 키) 로그이상_('날짜가 ' + 키 + ' 이어야 함', b, 행, 내용, f);
+      if (m[2] !== b) 로그이상_('지점이 다름', b, 행, 내용, f);
+      if (본[f]) 로그이상_('같은 표시가 ' + 본[f] + '행에도 있음 (두 번 잡힘)', b, 행, 내용, f);
+      본[f] = 본[f] || 행;
+      if (m[4]) 로그이상_('옛 방식 표시(_row)가 10월 이후에 생김', b, 행, 내용, f);
+    });
+  });
+  return 로그이상알림_();
 }
 
 /** 사장님께 메일. 솔라피와 무관한 경로라 그쪽이 막혀도 나간다 */
@@ -3002,6 +3053,12 @@ function 관리비분리_(dryRun) {
 // ════════════════════════════════════════════════════════════
 
 function 직접입력_(data) {
+  // 🔒 26-11-14 ② 한 번에 한 곳만 (staffRouter_ 와 같은 까닭)
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch (e) { return jsonOut_({ success: false, error: '다른 처리가 돌고 있어요 — 잠시 뒤 다시' }); }
+  try { return 직접입력안_(data); } finally { try { 로그이상알림_(); } catch (e) {} lock.releaseLock(); }
+}
+function 직접입력안_(data) {
   var store  = data.store || '백석점';
   var cat    = String(data.분류 || data.category || '').trim();
   if (분류바꾸기_[cat]) cat = 분류바꾸기_[cat];   // 옛 이름이 와도 시트 계정 이름으로 (26-10-03)
@@ -3839,8 +3896,16 @@ function upsertLogEntry(logSheet, ymd, category, itemName, amount, branch, marke
   //    원당 동기화 · 알바 백업 · 실패 점검이 안 돌았습니다. 금액·계산은 그대로, 같은 값 다시 쓰기만 뺌
   if (lastRow > 1) {
     var fCol = logSheet.getRange(2, 4, lastRow - 1, 3).getValues();   // D 금액 · E · F marker
+    // 🛡 26-11-14 ① 쓰기 전 확인 — 표시(F)가 같아도 날짜(A)·분류(B)가 다르면 「이미 있음」으로 치지 않음 · 사장님께 알림
+    //    전에는 표시만 보고 그 줄 금액을 고치거나 「같은 금액이라 그대로」 → 9/22 처럼 조용히 0원 (전진법 — 앞으로 쓰는 것에만)
+    var ab = logSheet.getRange(2, 1, lastRow - 1, 2).getValues();
     for (var i = 0; i < fCol.length; i++) {
       if (String(fCol[i][2]).trim() === marker) {
+        var 그날 = toDate_(ab[i][0]), 그날글 = 그날 ? Utilities.formatDate(그날, TIMEZONE, 'yyyy-MM-dd') : String(ab[i][0]);
+        if (그날글 !== String(ymd) || String(ab[i][1]).trim() !== category) {
+          로그이상_('표시는 같은데 날짜·분류가 다름 → 새 줄로 씀', branch, i + 2, 그날글 + ' · ' + ab[i][1] + ' (기대 ' + ymd + ' · ' + category + ')', marker);
+          continue;
+        }
         var rowNum = i + 2;
         if (Number(fCol[i][0]) === Number(amount)) return true;   // 같은 금액 — 그대로 둠
         logSheet.getRange(rowNum, 4).setValue(amount);   // D: 금액 갱신
