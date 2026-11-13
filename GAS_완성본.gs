@@ -1645,6 +1645,40 @@ function doGet(e) {
       return out_(cb, { ok: true, 결과: 결과, 줄: 줄 });
     } catch (err) { return out_(cb, { ok: false, error: err.message }); }
   }
+  // 🔎 26-11-14 사장님 「검사 한번 돌려줘」 — 자동 줄([자동]분류_지점_날짜) 이 제 모양인지 · 읽기만
+  //    ① 분류(B)가 표시와 다름 ② 날짜(A)가 표시와 다름 ③ 지점(E)이 다름 ④ 같은 표시가 두 줄 이상 · 「_중복」「_섞임」 줄은 이미 정리된 것이라 뺌
+  if (action === 'logScan') {
+    try {
+      var 이상 = [], 셈 = {};
+      Object.keys(BRANCH_CONFIG).forEach(function (b) {
+        var lg = SpreadsheetApp.openById(BRANCH_CONFIG[b].ssId).getSheetByName('지출및매출로그'); if (!lg || lg.getLastRow() < 2) return;
+        var 본 = {}, n = 0, 날 = {};
+        lg.getRange(2, 1, lg.getLastRow() - 1, 7).getValues().forEach(function (r, i) {
+          var f = String(r[5]).trim(); if (f.indexOf('[자동]') !== 0) return;
+          var 분류 = String(r[1]).trim(); if (/_중복$/.test(분류) || /_섞임$/.test(f)) return;
+          n++;
+          var m = f.match(/^\[자동\](.+)_(백석점|원당점)_(\d{4}-\d{2}(?:-\d{2})?)(_row\d+)?$/); var 행 = i + 2;   // _rowN = 옛 주류·콩나물 표시 (6~9월)
+          var d = toDate_(r[0]), ymd = d ? Utilities.formatDate(d, TIMEZONE, 'yyyy-MM-dd') : String(r[0]);
+          var 줄 = { 지점: b, 행: 행, 날짜: ymd, 분류: 분류, 항목: String(r[2]).slice(0, 40), 금액: Number(r[3]) || 0, 표시: f };
+          if (!m) { 이상.push(Object.assign({ 왜: '표시 모양을 모름' }, 줄)); return; }
+          var 기대분류 = m[1] === '4대보험추정' ? '4대보험' : m[1], 키 = m[3];
+          var 왜 = [];
+          if (분류 !== 기대분류) 왜.push('분류가 ' + 기대분류 + ' 이어야 함');
+          if (키.length === 10 ? ymd !== 키 : ymd.slice(0, 7) !== 키) 왜.push('날짜가 ' + 키 + ' 이어야 함');
+          if (m[2] !== b || (String(r[4]).trim() && String(r[4]).trim() !== b)) 왜.push('지점이 다름');
+          if (본[f]) 왜.push('같은 표시 ' + 본[f] + '행에도 있음');
+          본[f] = 본[f] || 행;
+          // 옛 표시(_rowN)와 새 표시가 같은 날·같은 분류에 같이 있으면 두 번 잡힌 것일 수 있음
+          var 날키 = m[1] + '|' + 키; (날[날키] = 날[날키] || []).push({ 행: 행, 옛: !!m[4], 금액: Number(r[3]) || 0 });
+          if (왜.length) 이상.push(Object.assign({ 왜: 왜.join(' · ') }, 줄));
+        });
+        Object.keys(날).forEach(function (k) { var xs = 날[k]; if (xs.some(function (x) { return x.옛; }) && xs.some(function (x) { return !x.옛; }))
+          이상.push({ 지점: b, 행: xs.map(function (x) { return x.행; }).join(','), 날짜: k.split('|')[1], 분류: k.split('|')[0], 금액: xs.reduce(function (a, x) { return a + x.금액; }, 0), 표시: '', 항목: xs.map(function (x) { return (x.옛 ? '옛 ' : '새 ') + x.금액; }).join(' + '), 왜: '옛 표시와 새 표시가 같은 날 같이 있음 (두 번 잡혔을 수 있음)' }); });
+        셈[b] = n;
+      });
+      return out_(cb, { ok: true, 본줄: 셈, 이상: 이상 });
+    } catch (err) { return out_(cb, { ok: false, error: err.message }); }
+  }
   if (action === 'staffList') {
     try {
       return out_(cb, { ok: true, data: staffList_() });
